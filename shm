@@ -1,0 +1,208 @@
+#!/bin/sh
+
+# check dependencies
+isInstalled() { command -v "$*" >/dev/null; }
+missingdeps=
+for dep in sed awk cut tr curl git
+do isInstalled "$dep" || missingdeps="$dep $missingdeps"
+done
+if [ -n "$missingdeps" ]
+then echo "Required but not installed: $missingdeps"; exit
+fi
+
+
+myname=$(echo "$0" | sed -n 's/^.*\/\([^\/]\+\)/\1/p')
+mydir="$HOME/.shm"
+
+help() {
+  echo "
+  Usage: $myname <operator> [flags]
+
+  Flags:
+    -d       <domain>               enforce a specific domain to clone from         -
+    -a       <author>               enforce a specific domain to clone from         -
+
+  Operator:
+    c|clone  <author/package>..     clone packages from GitHub, GitLab or Bitbucket v
+    r|remove <[author]/package>..   remove packages                                 -
+    s|sync   [[author]/[package]].. synchronize (all) packages                      -
+    l|list   [[author]/[package]].. list (all) packages                             v
+    p|path   [[author]/[package]].. add (all) packages to path                      -
+    m|man    <[author]/package>     view package's README file                      -
+
+    unistall                        unistall $myname and all packages               v
+    install                         installation for netinstall                     _
+"
+  exit
+}
+
+[ $# -le 0 ] && help
+
+err() { echo "$myname: $*" && exit; }
+
+# array implementation
+join() { tr ' ' ' '; }
+split() { tr ' ' ' '; }
+nth() {
+  i=0
+  n=$1; shift
+  for val in "$@"
+  do
+    [ $i -eq $n ] && echo "$val" | split && break
+    i=$((i+1))
+  done
+}
+slice() {
+  i=0
+  a=$1; shift
+  e=$1; shift
+  [ $a -lt 0 ] && a=$(($#+1+a))
+  [ $e -lt 0 ] && e=$(($#+1+e))
+  new=
+  for val in "$@"
+  do
+    [ $i -ge $e ] && break
+    [ $i -ge $a ] && new="$new $val"
+    i=$((i+1))
+  done
+  echo "$new"
+}
+count() { echo $#; }
+inside() {
+  key=$(echo "$1" | split); shift
+  is=0
+  for val in "$@"
+  do [ "$(echo "$val" | split)" = "$key" ] && is=1 && break
+  done
+  test $is -eq 1
+}
+
+
+toDir() {
+  cd "$mydir" 2>/dev/null || mkdir "$mydir" || exit
+  cd "$mydir/$1" 2>/dev/null || mkdir "$mydir/$1" || exit
+  cd "$mydir/$1/$2" 2>/dev/null || mkdir "$mydir/$1/$2" || exit
+  cd "$mydir/$1/$2"
+  [ $# -ge 3 ] && { cd "$3" || exit; }
+}
+
+packageUrl() { echo "https://$1/$2/$3/"; }
+
+clone() {
+  for i in "$@"
+  do
+    id=$(echo "$i" | tr '/' ' ')
+    author=$(nth 0 $id)
+    package=$(nth 1 $id)
+    [ -z "$package" ] 
+    echo "Querying $author/$package"
+
+    publicSources=
+    for srcDomain in github.com gitlab.com bitbucket.org
+    do
+      link=$(packageUrl $srcDomain $author $package)
+      status=$(curl -s -o /dev/null -I -w "%{http_code}" "$link")
+      echo "$status :: $link"
+      [ "$status" = 200 ] && publicSources="$publicSources $srcDomain"
+    done
+
+    if [ -z "$publicSources" ]
+    then echo "No sources found for $author/$package. Try using flag -d <domain> to enforce a domain"
+    else
+      sourcesCount=$(count $publicSources)
+      answer=0
+      if [ $sourcesCount -eq 1 ]
+      then answer=1
+      else
+        printf "Available sources:"
+        i=0
+        for src in $publicSources
+        do
+          i=$((i+1))
+          printf '  %d) %s' $i $src
+        done
+        echo
+        while [ $answer -lt 1 ] || [ $answer -gt $sourcesCount ]
+        do
+          printf 'Enter a number (default=1): '
+          read answer
+          if [ "$answer" = "$(printf '\n')" ]
+          then answer=1
+          else answer=$(printf '%d' "$answer")
+          fi
+        done
+      fi
+      src=$(nth $((answer-1)) $publicSources)
+      toDir $src $author
+      if [ -d $package ]
+      then
+        echo "Package with the same author and name has already been installed"
+        printf "Do you want to overwrite it? [y/N] "
+        read answer
+        if [ "$answer" = 'y' ] || [ "$answer" = 'Y' ]
+        then rm -rf $package
+        else continue
+        fi
+      fi
+      git clone "$(packageUrl $src $author $package)"
+    fi
+  done
+  echo 'Done'
+}
+
+getInstalledPackages() {
+  [ -d "$mydir" ] && find "$mydir" -mindepth 3 -maxdepth 3 -type d
+}
+
+list() {
+  for pkg in $(getInstalledPackages)
+  do
+    inPath=$(inside $pkg $(echo "$PATH" | tr ':' ' ') && echo 1)
+    queryReg=$(echo "$@" | sed 's/\s\+/\\|/g')
+    id=$(echo $pkg | sed 's/^.*\/\([^\/]\+\)\/\([^\/]\+\)$/\1\/\2/' | grep "$queryReg")
+    if [ -n "$id" ]
+    then
+      [ -z $inPath ] && printf '\033[2m'
+      echo $id | sed "s/\($queryReg\)/\o33[4m\1\o33[24m/g"
+      [ -z $inPath ] || printf '\033[32m\033[1m'
+      ls -l $pkg | grep '^[-l]..x' | awk '{print "  "$9}'
+    fi
+    printf '\033[0m'
+  done
+}
+
+args=
+for a in "$@"
+do [ "$(echo "$a" | cut -b 1)" != '-' ] && args="$args $(echo "$a" | join)"
+done
+
+operator=$(nth 0 $args)
+
+case $operator in
+  c|clone)
+    [ $(count $args) -lt 2 ] && err 'No packages specified'
+    clone $(slice 1 -1 $args)
+    ;;
+  r|remove)
+    [ $(count $args) -lt 2 ] && err 'No packages specified'
+    remove $(slice 1 -1 $args)
+    ;;
+  l|sync)
+    sync $(slice 1 -1 $args)
+    ;;
+  l|list)
+    list $(slice 1 -1 $args)
+    ;;
+  p|path)
+    path $(slice 1 -1 $args)
+    ;;
+  m|man)
+    man $(slice 1 -1 $args)
+    ;;
+  uninstall)
+    printf "Remove all packages and $myname? [y/N] "
+    read answer
+    { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ]; } && rm -rf "$mydir" &
+    ;;
+  *) err "unknown operator '$operator'" ;;
+esac
