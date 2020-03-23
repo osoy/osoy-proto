@@ -11,34 +11,31 @@ then echo "Required but not installed: $missingdeps"; exit
 fi
 
 
-myname=$(echo "$0" | sed -n 's/^.*\/\([^\/]\+\)/\1/p')
-mydir="$HOME/.shm"
+shmdir="$HOME/.shm"
 
 help() {
   echo "
-  Usage: $myname <operator> [flags]
+  Usage: shm <operator> [flags]
 
   Flags:
-    -d       <domain>               enforce a specific domain to clone from         -
-    -a       <author>               enforce a specific domain to clone from         -
+    -d       <domain>               enforce a specific domain to clone from         v
+    -a       <author>               enforce an author for list of packages          -
+    -p       <protocol>             enforce a protocol other than https             -
 
   Operator:
     c|clone  <author/package>..     clone packages from GitHub, GitLab or Bitbucket v
     r|remove <[author]/package>..   remove packages                                 -
     s|sync   [[author]/[package]].. synchronize (all) packages                      -
-    l|list   [[author]/[package]].. list (all) packages                             v
-    p|path   [[author]/[package]].. add (all) packages to path                      -
+    l|list   [[author]/[package]].. list (all) packages                             o
     m|man    <[author]/package>     view package's README file                      -
 
-    unistall                        unistall $myname and all packages               v
-    install                         installation for netinstall                     _
-"
+    unistall                        unistall shm and all packages                   v
+    netinstall                      installation for netinstall                     o
+  "
   exit
 }
 
-[ $# -le 0 ] && help
-
-err() { echo "$myname: $*" && exit; }
+err() { echo "shm: $*" && exit; }
 
 # array implementation
 join() { tr ' ' ' '; }
@@ -79,11 +76,10 @@ inside() {
 
 
 toDir() {
-  cd "$mydir" 2>/dev/null || mkdir "$mydir" || exit
-  cd "$mydir/$1" 2>/dev/null || mkdir "$mydir/$1" || exit
-  cd "$mydir/$1/$2" 2>/dev/null || mkdir "$mydir/$1/$2" || exit
-  cd "$mydir/$1/$2"
-  [ $# -ge 3 ] && { cd "$3" || exit; }
+  cd "$shmdir" 2>/dev/null || { mkdir "$shmdir" && cd "$shmdir"; } || exit
+  for v in "$@"
+  do cd "$v" 2>/dev/null || { mkdir "$v" && cd "$v"; } || exit
+  done
 }
 
 packageUrl() { echo "https://$1/$2/$3/"; }
@@ -98,13 +94,17 @@ clone() {
     echo "Querying $author/$package"
 
     publicSources=
-    for srcDomain in github.com gitlab.com bitbucket.org
-    do
-      link=$(packageUrl $srcDomain $author $package)
-      status=$(curl -s -o /dev/null -I -w "%{http_code}" "$link")
-      echo "$status :: $link"
-      [ "$status" = 200 ] && publicSources="$publicSources $srcDomain"
-    done
+    if [ -z "$d" ]
+    then
+      for srcDomain in github.com gitlab.com bitbucket.org
+      do
+        link=$(packageUrl $srcDomain $author $package)
+        status=$(curl -s -o /dev/null -I -w "%{http_code}" "$link")
+        echo "$status :: $link"
+        [ "$status" = 200 ] && publicSources="$publicSources $srcDomain"
+      done
+    else publicSources=$d
+    fi
 
     if [ -z "$publicSources" ]
     then echo "No sources found for $author/$package. Try using flag -d <domain> to enforce a domain"
@@ -133,7 +133,7 @@ clone() {
         done
       fi
       src=$(nth $((answer-1)) $publicSources)
-      toDir $src $author
+      toDir 'packages' $src $author
       if [ -d $package ]
       then
         echo "Package with the same author and name has already been installed"
@@ -151,7 +151,7 @@ clone() {
 }
 
 getInstalledPackages() {
-  [ -d "$mydir" ] && find "$mydir" -mindepth 3 -maxdepth 3 -type d
+  [ -d "$shmdir" ] && find "$shmdir" -mindepth 4 -maxdepth 4 -type d
 }
 
 list() {
@@ -171,12 +171,34 @@ list() {
   done
 }
 
+d=
+a=
+p=
+h=
 args=
-for a in "$@"
-do [ "$(echo "$a" | cut -b 1)" != '-' ] && args="$args $(echo "$a" | join)"
+currentflag=
+for arg in "$@"
+do
+  if [ -n "$currentflag" ]
+  then
+    flag=$currentflag
+    currentflag=
+    case $flag in
+      -d) d=$arg; continue ;;
+      -a) a=$arg; continue ;;
+      -p) p=$arg; continue ;;
+      *) err "Unknown flag '$flag'"
+    esac
+  fi
+  if [ "$(echo "$arg" | cut -b 1)" = '-' ]
+  then currentflag=$arg
+  else args="$args $(echo "$arg" | join)"
+  fi
 done
 
 operator=$(nth 0 $args)
+
+[ -z $operator ] && help
 
 case $operator in
   c|clone)
@@ -187,7 +209,7 @@ case $operator in
     [ $(count $args) -lt 2 ] && err 'No packages specified'
     remove $(slice 1 -1 $args)
     ;;
-  l|sync)
+  s|sync)
     sync $(slice 1 -1 $args)
     ;;
   l|list)
@@ -200,9 +222,20 @@ case $operator in
     man $(slice 1 -1 $args)
     ;;
   uninstall)
-    printf "Remove all packages and $myname? [y/N] "
+    printf "Remove all packages and shm? [y/N] "
     read answer
-    { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ]; } && rm -rf "$mydir" &
+    { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ]; } && rm -rf "$shmdir" &
+    ;;
+  netinstall)
+    if [ -d $shmdir/packages/github.com/rasmusmerzin/shm ]
+    then
+      echo 'Shell Manager seems to be already installed. Try updating it with "shm sync shm".'
+    else
+      printf "Install shm to $shmdir/packages/github.com/rasmusmerzin/shm? [Y/n] "
+      read answer
+      d='github.com'
+      { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ] || [ "$answer" = "$(printf '\n')" ]; } && clone rasmusmerzin/shm
+    fi
     ;;
   *) err "unknown operator '$operator'" ;;
 esac
