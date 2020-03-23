@@ -18,48 +18,56 @@ help() {
   Usage: shm <operator> [flags]
 
   Flags:
-    -d       <domain>               enforce a specific domain to clone from         v
-    -a       <author>               enforce an author for list of packages          -
-    -p       <protocol>             enforce a protocol other than https             -
+    -d          <domain>  enforce a specific domain to clone from         v
+    -a          <author>  specify packages' author                        v
+    -p         <protocol> specify a protocol other than HTTPS             v
+    -b          <branch>  specify a single branch as the HEAD             v
+    -B             -      clone all branches                              v
 
   Operator:
-    c|clone  <author/package>..     clone packages from GitHub, GitLab or Bitbucket v
-    r|remove <[author]/package>..   remove packages                                 -
-    s|sync   [[author]/[package]].. synchronize (all) packages                      -
-    l|list   [[author]/[package]].. list (all) packages                             o
-    m|man    <[author]/package>     view package's README file                      -
+    c|clone     <query*>  clone packages from GitHub, GitLab or Bitbucket o
+    a|add       <query*>  symlik packages' executables to bin             -
+    r|remove    <query*>  remove packages                                 -
+    s|sync      [query*]  synchronize (all) packages                      -
+    l|list      [query*]  list (all) packages                             o
+    m|man       <query>   view package's README file                      -
 
-    unistall                        unistall shm and all packages                   v
-    netinstall                      installation for netinstall                     o
+    unistall       -      unistall shm and all packages                   v
+    netinstall     -      installation for netinstall                     o
+
+  Query syntax: <[[domain/]author/]package>
   "
   exit
 }
 
 err() { echo "shm: $*" && exit; }
 
+
+
 # array implementation
 join() { tr ' ' ' '; }
 split() { tr ' ' ' '; }
 nth() {
   i=0
-  n=$1; shift
+  target=$1; shift
+  [ $target -lt 0 ] && target=$(($#+target))
   for val in "$@"
   do
-    [ $i -eq $n ] && echo "$val" | split && break
+    [ $i -eq $target ] && echo "$val" | split && break
     i=$((i+1))
   done
 }
 slice() {
   i=0
-  a=$1; shift
-  e=$1; shift
-  [ $a -lt 0 ] && a=$(($#+1+a))
-  [ $e -lt 0 ] && e=$(($#+1+e))
+  start=$1; shift
+  end=$1; shift
+  [ $start -lt 0 ] && start=$(($#+1+start))
+  [ $end -lt 0 ] && end=$(($#+1+end))
   new=
   for val in "$@"
   do
-    [ $i -ge $e ] && break
-    [ $i -ge $a ] && new="$new $val"
+    [ $i -ge $end ] && break
+    [ $i -ge $start ] && new="$new $val"
     i=$((i+1))
   done
   echo "$new"
@@ -75,6 +83,8 @@ inside() {
 }
 
 
+
+
 toDir() {
   cd "$shmdir" 2>/dev/null || { mkdir "$shmdir" && cd "$shmdir"; } || exit
   for v in "$@"
@@ -82,28 +92,82 @@ toDir() {
   done
 }
 
-packageUrl() { echo "https://$1/$2/$3/"; }
+inBin() {
+  echo
+}
+
+addToBin() {
+  echo
+}
+
+getQuery() {
+  wholeQuery=
+  for i in "$@"
+  do
+    id=$(echo "$i" | tr '/' ' ')
+    package=$(nth -1 $id)
+    author=$(nth -2 $id)
+    domain=$(nth -3 $id)
+
+    [ -z "$author" ] && [ -n "$a" ] && author=$a
+    [ -z "$domain" ] && [ -n "$d" ] && domain=$d
+
+    query=$(echo ".*$domain.*\/.*$author.*\/.*$package.*" | sed 's/\([^\\]\)\./\1[^\\\/]/g')
+    if [ -z "$wholeQuery" ]
+    then wholeQuery=$query
+    else wholeQuery="$wholeQuery\|$query"
+    fi
+  done
+  echo "$wholeQuery"
+}
+
+getInstalledPackages() {
+  if [ -d "$shmdir" ]
+  then find "$shmdir/packages" -mindepth 3 -maxdepth 3 -type d -regextype sed -regex ".*\($(getQuery $*)\)$"
+  fi
+}
+
+list() {
+  for pkg in $(getInstalledPackages $*)
+  do
+    echo "$pkg" | sed 's/^.*\/\([^\/]\+\)\/\([^\/]\+\)\/\([^\/]\+\)$/\1\/\2\/\3/'
+    ls -l "$pkg" | grep '^[-l]..x' | awk '{print "  "$9}'
+  done
+}
+
+packageUrl() { echo "$1://$2/$3/$4/"; }
+httpStatus() { curl -s -o /dev/null -I -w "%{http_code}" "$*"; }
 
 clone() {
   for i in "$@"
   do
     id=$(echo "$i" | tr '/' ' ')
-    author=$(nth 0 $id)
-    package=$(nth 1 $id)
-    [ -z "$package" ] 
-    echo "Querying $author/$package"
+    package=$(nth -1 $id)
+    author=$(nth -2 $id)
+    domain=$(nth -3 $id)
+
+    if [ -z "$author" ]
+    then
+      if [ -n "$a" ]
+      then author=$a
+      else author=$package
+      fi
+    fi
 
     publicSources=
-    if [ -z "$d" ]
-    then
-      for srcDomain in github.com gitlab.com bitbucket.org
+    if [ -n "$domain" ]
+    then publicSources=$domain
+    elif [ -n "$d" ]
+    then publicSources=$d
+    else
+      echo "Querying $author/$package"
+      for domain in github.com gitlab.com bitbucket.org
       do
-        link=$(packageUrl $srcDomain $author $package)
-        status=$(curl -s -o /dev/null -I -w "%{http_code}" "$link")
+        link=$(packageUrl $p $domain $author $package)
+        status=$(httpStatus $link)
         echo "$status :: $link"
-        [ "$status" = 200 ] && publicSources="$publicSources $srcDomain"
+        [ "$status" = 200 ] && publicSources="$publicSources $domain"
       done
-    else publicSources=$d
     fi
 
     if [ -z "$publicSources" ]
@@ -116,126 +180,133 @@ clone() {
       else
         printf "Available sources:"
         i=0
-        for src in $publicSources
+        for domain in $publicSources
         do
           i=$((i+1))
-          printf '  %d) %s' $i $src
+          printf '  %d) %s' $i $domain
         done
         echo
         while [ $answer -lt 1 ] || [ $answer -gt $sourcesCount ]
         do
           printf 'Enter a number (default=1): '
-          read answer
+          read -r answer
           if [ "$answer" = "$(printf '\n')" ]
           then answer=1
           else answer=$(printf '%d' "$answer")
           fi
         done
       fi
-      src=$(nth $((answer-1)) $publicSources)
-      toDir 'packages' $src $author
+      domain=$(nth $((answer-1)) $publicSources)
+      toDir 'packages' $domain $author
       if [ -d $package ]
       then
-        echo "Package with the same author and name has already been installed"
+        echo 'Package with the same author and name has already been installed'
+        echo 'Using "shm sync <package>" is recommended'
         printf "Do you want to overwrite it? [y/N] "
-        read answer
+        read -r answer
         if [ "$answer" = 'y' ] || [ "$answer" = 'Y' ]
         then rm -rf $package
         else continue
         fi
       fi
-      git clone "$(packageUrl $src $author $package)"
+      gitFlags=
+      [ -z "$B" ] && gitFlags="$gitFlags --single-branch"
+      [ -n "$b" ] && gitFlags="$gitFlags --branch $b"
+      git clone $gitFlags "$(packageUrl $p $domain $author $package)"
     fi
   done
   echo 'Done'
 }
 
-getInstalledPackages() {
-  [ -d "$shmdir" ] && find "$shmdir" -mindepth 4 -maxdepth 4 -type d
-}
 
-list() {
-  for pkg in $(getInstalledPackages)
+
+# main() {
+  d=
+  a=
+  p=
+  b=
+  B=
+  args=
+  currentflag=
+  for arg in "$@"
   do
-    inPath=$(inside $pkg $(echo "$PATH" | tr ':' ' ') && echo 1)
-    queryReg=$(echo "$@" | sed 's/\s\+/\\|/g')
-    id=$(echo $pkg | sed 's/^.*\/\([^\/]\+\)\/\([^\/]\+\)$/\1\/\2/' | grep "$queryReg")
-    if [ -n "$id" ]
+    arg=$(echo "$arg" | join)
+    if [ -n "$currentflag" ]
     then
-      [ -z $inPath ] && printf '\033[2m'
-      echo $id | sed "s/\($queryReg\)/\o33[4m\1\o33[24m/g"
-      [ -z $inPath ] || printf '\033[32m\033[1m'
-      ls -l $pkg | grep '^[-l]..x' | awk '{print "  "$9}'
+      flag=$currentflag
+      currentflag=
+      case $flag in
+        d) d=$arg; continue ;;
+        a) a=$arg; continue ;;
+        p) p=$arg; continue ;;
+        b) b=$arg; continue ;;
+        *) err "unknown flag '-$flag'"
+      esac
     fi
-    printf '\033[0m'
+    if [ "$(echo "$arg" | cut -b 1)" = '-' ]
+    then
+      flagBundle=$(echo "$arg" | cut -b 2- | sed 's/\(.\)/\1 /g')
+      flagBundleCount=$(count $flagBundle)
+      i=0
+      for flag in $flagBundle
+      do i=$((i+1))
+        case $flag in
+          B) B=1 ;;
+          *)
+            if [ $i -eq $flagBundleCount ]
+            then currentflag=$flag
+            else err "unknown flag '-$flag'"
+            fi
+            ;;
+        esac
+      done
+    else args="$args $arg"
+    fi
   done
-}
+  [ -n "$currentflag" ] && err "flag '-$currentflag' is either unknown or requires a value"
+  [ -z "$p" ] && p='https'
 
-d=
-a=
-p=
-h=
-args=
-currentflag=
-for arg in "$@"
-do
-  if [ -n "$currentflag" ]
-  then
-    flag=$currentflag
-    currentflag=
-    case $flag in
-      -d) d=$arg; continue ;;
-      -a) a=$arg; continue ;;
-      -p) p=$arg; continue ;;
-      *) err "Unknown flag '$flag'"
-    esac
-  fi
-  if [ "$(echo "$arg" | cut -b 1)" = '-' ]
-  then currentflag=$arg
-  else args="$args $(echo "$arg" | join)"
-  fi
-done
+  operator=$(nth 0 $args)
 
-operator=$(nth 0 $args)
+  [ -z $operator ] && help
 
-[ -z $operator ] && help
-
-case $operator in
-  c|clone)
-    [ $(count $args) -lt 2 ] && err 'No packages specified'
-    clone $(slice 1 -1 $args)
-    ;;
-  r|remove)
-    [ $(count $args) -lt 2 ] && err 'No packages specified'
-    remove $(slice 1 -1 $args)
-    ;;
-  s|sync)
-    sync $(slice 1 -1 $args)
-    ;;
-  l|list)
-    list $(slice 1 -1 $args)
-    ;;
-  p|path)
-    path $(slice 1 -1 $args)
-    ;;
-  m|man)
-    man $(slice 1 -1 $args)
-    ;;
-  uninstall)
-    printf "Remove all packages and shm? [y/N] "
-    read answer
-    { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ]; } && rm -rf "$shmdir" &
-    ;;
-  netinstall)
-    if [ -d $shmdir/packages/github.com/rasmusmerzin/shm ]
-    then
-      echo 'Shell Manager seems to be already installed. Try updating it with "shm sync shm".'
-    else
-      printf "Install shm to $shmdir/packages/github.com/rasmusmerzin/shm? [Y/n] "
-      read answer
-      d='github.com'
-      { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ] || [ "$answer" = "$(printf '\n')" ]; } && clone rasmusmerzin/shm
-    fi
-    ;;
-  *) err "unknown operator '$operator'" ;;
-esac
+  case $operator in
+    c|clone)
+      [ $(count $args) -lt 2 ] && err 'no packages specified'
+      clone $(slice 1 -1 $args)
+      ;;
+    r|remove)
+      [ $(count $args) -lt 2 ] && err 'no packages specified'
+      remove $(slice 1 -1 $args)
+      ;;
+    s|sync)
+      sync $(slice 1 -1 $args)
+      ;;
+    l|list)
+      list $(slice 1 -1 $args)
+      ;;
+    p|path)
+      path $(slice 1 -1 $args)
+      ;;
+    m|man)
+      man $(slice 1 -1 $args)
+      ;;
+    uninstall)
+      printf "Remove all packages and shm? [y/N] "
+      read -r answer
+      { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ]; } && rm -rf "$shmdir" &
+      ;;
+    netinstall)
+      if [ -d "$shmdir"/packages/github.com/rasmusmerzin/shm ]
+      then
+        echo 'Shell Manager seems to be already installed. Try updating it with "shm sync shm".'
+      else
+        printf "Install shm to $shmdir/packages/github.com/rasmusmerzin/shm? [Y/n] "
+        read -r answer
+        d='github.com'
+        { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ] || [ "$answer" = "$(printf '\n')" ]; } && clone rasmusmerzin/shm
+      fi
+      ;;
+    *) err "unknown operator '$operator'" ;;
+  esac
+# }
