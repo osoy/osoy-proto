@@ -2,7 +2,7 @@
 
 err() { echo "error: $*" && exit; }
 msg() {
-  printf '# '
+  printf '\033[2m##\033[22m '
   if [ "$1" = '-n' ]
   then shift; printf "$*"
   else echo "$*"
@@ -12,7 +12,7 @@ msg() {
 # check dependencies
 isInstalled() { command -v "$*" >/dev/null; }
 missingdeps=
-for dep in sed awk cut tr curl git
+for dep in sed grep cut tr curl git
 do isInstalled "$dep" || missingdeps="$dep $missingdeps"
 done
 if [ -n "$missingdeps" ]
@@ -27,26 +27,51 @@ help() {
   Usage: osoy <operator> [flags]
 
   Flags:
-    -d          <domain>  enforce a specific domain to clone from         v
-    -a          <author>  specify packages' author                        v
+    -d         <domain>   enforce a specific domain to clone from         v
+    -a         <author>   specify packages' author                        v
     -p         <protocol> specify a protocol other than HTTPS             v
-    -b          <branch>  specify a single branch as the HEAD             v
-    -B             -      clone all branches                              v
+    -b         <branch>   specify a single branch as the HEAD             v
+    -B         -          clone all branches                              v
+    -y         -          proceed with defaults                           v
+    -f         -          force overwriting and/or removing               v
+    -v         -          show version                                    v
 
   Operator:
-    c|clone     <query*>  clone packages from GitHub, GitLab or Bitbucket o
-    a|add       <query*>  symlik packages' executables to bin             -
-    r|remove    <query*>  remove packages                                 -
-    s|sync      [query*]  synchronize (all) packages                      -
-    l|list      [query*]  list (all) packages                             o
-    m|man       <query>   view package's README file                      -
+    c|clone    <query*>   clone packages from GitHub, GitLab or Bitbucket v
+    s|symlink  <query*>   make packages' executables available in PATH    v
+    r|remove   <query*>   remove packages                                 -
+    u|update   [query*]   update (all) packages                           -
+    l|list     [query*]   list (all) packages                             v
+    m|man      <query>    view package's README file                      -
 
-    unistall       -      unistall osoy and all packages                  v
-    netinstall     -      installation for netinstall                     o
+    unistall   -          uninstall osoy and all packages                 v
+    netinstall -          installation for netinstall                     o
 
   Query syntax: <[[domain/]author/]package>
   "
   exit
+}
+
+
+
+# prompts
+promptYes() {
+  msg -n "$* [Y/n] "
+  if [ -n "$y" ]
+  then echo; answer=$(printf '\n')
+  else read -r answer
+  fi
+  [ "$answer" = 'y' ] || [ "$answer" = 'Y' ] || [ "$answer" = "$(printf '\n')" ]
+}
+promptNo() {
+  promptChoice='[y/N]'
+  [ -n "$f" ] && promptChoice='[Y/n]'
+  msg -n "$* $promptChoice "
+  if [ -n "$y" ]
+  then echo; answer=$(printf '\n')
+  else read -r answer
+  fi
+  [ "$answer" = 'y' ] || [ "$answer" = 'Y' ] || { [ -n "$f" ] && [ "$answer" = "$(printf '\n')" ]; }
 }
 
 
@@ -94,17 +119,55 @@ inside() {
 
 toDir() {
   cd "$osoydir" 2>/dev/null || { mkdir "$osoydir" && cd "$osoydir"; } || exit
-  for v in "$@"
-  do cd "$v" 2>/dev/null || { mkdir "$v" && cd "$v"; } || exit
+  for subdir in "$@"
+  do cd "$subdir" 2>/dev/null || { mkdir "$subdir" && cd "$subdir"; } || exit
   done
 }
 
-inBin() {
-  err "not implemented yet"
+getFilename() { echo "$*" | sed -n 's/^.*\/\([^\/]\+\)$/\1/p'; }
+
+inBin() {(
+  toDir "$osoydir" bin
+  ls -la | sed -n 's/^l.*[0-9]\{2\}:[0-9]\{2\} \(.\+\) -> '"$(echo "$*" | sed -s 's/\//\\\//g')"'$/\1/p'
+)}
+
+addToBin() {(
+  toDir "$osoydir" bin
+  filename=$(getFilename "$*")
+  symbolicSource=$(ls -la | sed -n 's/^l.*[0-9]\{2\}:[0-9]\{2\} '"$filename"' -> \(.\+\)$/\1/p')
+  { [ -n "$f" ] || [ -z "$symbolicSource" ]; } &&
+  ln -sfv "$*" "$filename"
+)}
+
+removeFromBin() {(
+  toDir "$osoydir" bin
+  rm -vf "$(inBin "$*")" 2>/dev/null
+)}
+
+addPackagesToBin() {
+  output=$(
+    for pkg in $(getInstalledPackages $*)
+    do
+      find "$pkg" -maxdepth 1 -type f,l | while read file
+      do [ -x "$file" ] && addToBin "$file"
+      done
+    done
+  )
+  echo "$output" | grep -v '^$'
+  msg "$(echo "$output" | grep -vc '^$') symbolic link(s) added"
 }
 
-addToBin() {
-  err "not implemented yet"
+removePackagesFromBin() {
+  output=$(
+    for pkg in $(getInstalledPackages $*)
+    do
+      find "$pkg" -maxdepth 1 -type f,l | while read file
+      do [ -x "$file" ] && removeFromBin "$file"
+      done
+    done
+  )
+  echo "$output" | grep -v '^$'
+  msg "$(echo "$output" | grep -vc '^$') symbolic link(s) removed"
 }
 
 getQuery() {
@@ -137,8 +200,15 @@ getInstalledPackages() {
 list() {
   for pkg in $(getInstalledPackages $*)
   do
-    echo "$pkg" | sed 's/^.*\/\([^\/]\+\)\/\([^\/]\+\)\/\([^\/]\+\)$/\1\/\2\/\3/'
-    ls -l "$pkg" | grep '^[-l]..x' | awk '{print "  "$9}'
+    echo "$pkg" | sed 's/^.*\/\([^\/]\+\)\/\([^\/]\+\)\/\([^\/]\+\)$/\o33[2m\1\/\2\/\o33[22m\o33[1m\3\o33[0m/'
+    find "$pkg" -maxdepth 1 -type f,l | while read file
+    do [ -x "$file" ] && {
+      symbolic=$(inBin "$file")
+      if [ -n "$symbolic" ]
+      then printf '  %s <- \033[32m%s\033[0m\n' "$(getFilename "$file")" "$symbolic"
+      else printf '  \033[2m%s\033[22m\n' "$(getFilename "$file")"
+      fi
+    } done
   done
 }
 
@@ -196,7 +266,10 @@ clone() {
         while [ $answer -lt 1 ] || [ $answer -gt $sourcesCount ]
         do
           msg -n 'Enter a number (default=1): '
-          read -r answer
+          if [ -n "$y" ]
+          then echo; answer=$(printf '\n')
+          else read -r answer
+          fi
           if [ "$answer" = "$(printf '\n')" ]
           then answer=1
           else answer=$(printf '%d' "$answer")
@@ -209,9 +282,7 @@ clone() {
       then
         msg 'Package with the same author and name has already been installed'
         msg 'Using "osoy sync <package>" is recommended'
-        msg -n "Do you want to overwrite it? [y/N] "
-        read -r answer
-        if [ "$answer" = 'y' ] || [ "$answer" = 'Y' ]
+        if promptNo "Do you want to overwrite it?"
         then rm -rf $package
         else continue
         fi
@@ -219,7 +290,9 @@ clone() {
       gitFlags=
       [ -z "$B" ] && gitFlags="$gitFlags --single-branch"
       [ -n "$b" ] && gitFlags="$gitFlags --branch $b"
-      git clone $gitFlags "$(packageUrl $p $domain $author $package)"
+      git clone $gitFlags "$(packageUrl $p $domain $author $package)" &&
+        promptYes "Symlink $package's executables?" &&
+          addPackagesToBin "$domain/$author/$package"
     fi
   done
   msg 'Done'
@@ -233,6 +306,9 @@ clone() {
   p=
   b=
   B=
+  y=
+  f=
+  v=
   args=
   currentflag=
   for arg in "$@"
@@ -259,6 +335,9 @@ clone() {
       do i=$((i+1))
         case $flag in
           B) B=1 ;;
+          y) y=1 ;;
+          f) f=1 ;;
+          v) v=1 ;;
           *)
             if [ $i -eq $flagBundleCount ]
             then currentflag=$flag
@@ -275,45 +354,35 @@ clone() {
 
   operator=$(nth 0 $args)
 
-  [ -z $operator ] && help
-
-  case $operator in
-    c|clone)
-      [ $(count $args) -lt 2 ] && err 'no packages specified'
-      clone $(slice 1 -1 $args)
-      ;;
-    r|remove)
-      [ $(count $args) -lt 2 ] && err 'no packages specified'
-      remove $(slice 1 -1 $args)
-      ;;
-    s|sync)
-      sync $(slice 1 -1 $args)
-      ;;
-    l|list)
-      list $(slice 1 -1 $args)
-      ;;
-    p|path)
-      path $(slice 1 -1 $args)
-      ;;
-    m|man)
-      man $(slice 1 -1 $args)
-      ;;
-    uninstall)
-      msg -n "Remove all packages and osoy? [y/N] "
-      read -r answer
-      { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ]; } && rm -rf "$osoydir" &
-      ;;
-    netinstall)
-      if [ -d "$osoydir"/packages/github.com/rasmusmerzin/osoy ]
-      then
-        msg 'Shell Manager seems to be already installed. Try updating it with "osoy sync osoy".'
-      else
-        msg -n "Install osoy to $osoydir/packages/github.com/rasmusmerzin/osoy? [Y/n] "
-        read -r answer
-        d='github.com'
-        { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ] || [ "$answer" = "$(printf '\n')" ]; } && clone osoy
-      fi
-      ;;
-    *) err "unknown operator '$operator'" ;;
-  esac
+  if [ -z $operator ]
+  then
+    if [ -n "$v" ] && [ "$(getFilename "$0")" = 'osoy' ]
+    then
+      (cd $(echo "$0" | sed 's/\/[^\/]\+$//') && git log --pretty=oneline -50 | sed -n 's/^.* v\([0-9]\+\.[0-9]\+\.[0-9]\+\)$/\1/p' | head -n 1)
+    else help
+    fi
+  else
+    case $operator in
+      c|clone)
+        [ $(count $args) -lt 2 ] && err 'no packages specified'
+        clone $(slice 1 -1 $args)
+        ;;
+      s|symlink)
+        addPackagesToBin $(slice 1 -1 $args)
+        ;;
+      l|list)
+        list $(slice 1 -1 $args)
+        ;;
+      uninstall)
+        promptNo "Remove all packages and osoy?" && { rm -rvf "$osoydir" & }
+        ;;
+      netinstall)
+        if [ -d "$osoydir"/packages/github.com/rasmusmerzin/osoy ]
+        then msg 'Shell Manager seems to be already installed. Try updating it with "osoy sync osoy".'
+        else promptYes "Install osoy to $osoydir/packages/github.com/rasmusmerzin/osoy?" && clone github.com/osoy/osoy
+        fi
+        ;;
+      *) err "unknown operator '$operator'" ;;
+    esac
+  fi
 # }
