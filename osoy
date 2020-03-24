@@ -11,11 +11,11 @@ then echo "Required but not installed: $missingdeps"; exit
 fi
 
 
-shmdir="$HOME/.shm"
+osoydir="$HOME/.osoy"
 
 help() {
   echo "
-  Usage: shm <operator> [flags]
+  Usage: osoy <operator> [flags]
 
   Flags:
     -d          <domain>  enforce a specific domain to clone from         v
@@ -32,7 +32,7 @@ help() {
     l|list      [query*]  list (all) packages                             o
     m|man       <query>   view package's README file                      -
 
-    unistall       -      unistall shm and all packages                   v
+    unistall       -      unistall osoy and all packages                  v
     netinstall     -      installation for netinstall                     o
 
   Query syntax: <[[domain/]author/]package>
@@ -40,7 +40,7 @@ help() {
   exit
 }
 
-err() { echo "shm: $*" && exit; }
+err() { echo "osoy: $*" && exit; }
 
 
 
@@ -86,7 +86,7 @@ inside() {
 
 
 toDir() {
-  cd "$shmdir" 2>/dev/null || { mkdir "$shmdir" && cd "$shmdir"; } || exit
+  cd "$osoydir" 2>/dev/null || { mkdir "$osoydir" && cd "$osoydir"; } || exit
   for v in "$@"
   do cd "$v" 2>/dev/null || { mkdir "$v" && cd "$v"; } || exit
   done
@@ -122,8 +122,8 @@ getQuery() {
 }
 
 getInstalledPackages() {
-  if [ -d "$shmdir" ]
-  then find "$shmdir/packages" -mindepth 3 -maxdepth 3 -type d -regextype sed -regex ".*\($(getQuery $*)\)$"
+  if [ -d "$osoydir" ]
+  then find "$osoydir/packages" -mindepth 3 -maxdepth 3 -type d -regextype sed -regex ".*\($(getQuery $*)\)$"
   fi
 }
 
@@ -201,7 +201,7 @@ clone() {
       if [ -d $package ]
       then
         echo 'Package with the same author and name has already been installed'
-        echo 'Using "shm sync <package>" is recommended'
+        echo 'Using "osoy sync <package>" is recommended'
         printf "Do you want to overwrite it? [y/N] "
         read -r answer
         if [ "$answer" = 'y' ] || [ "$answer" = 'Y' ]
@@ -292,19 +292,19 @@ clone() {
       man $(slice 1 -1 $args)
       ;;
     uninstall)
-      printf "Remove all packages and shm? [y/N] "
+      printf "Remove all packages and osoy? [y/N] "
       read -r answer
-      { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ]; } && rm -rf "$shmdir" &
+      { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ]; } && rm -rf "$osoydir" &
       ;;
     netinstall)
-      if [ -d "$shmdir"/packages/github.com/rasmusmerzin/shm ]
+      if [ -d "$osoydir"/packages/github.com/rasmusmerzin/osoy ]
       then
-        echo 'Shell Manager seems to be already installed. Try updating it with "shm sync shm".'
+        echo 'Shell Manager seems to be already installed. Try updating it with "osoy sync osoy".'
       else
-        printf "Install shm to $shmdir/packages/github.com/rasmusmerzin/shm? [Y/n] "
+        printf "Install osoy to $osoydir/packages/github.com/rasmusmerzin/osoy? [Y/n] "
         read -r answer
         d='github.com'
-        { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ] || [ "$answer" = "$(printf '\n')" ]; } && clone rasmusmerzin/shm
+        { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ] || [ "$answer" = "$(printf '\n')" ]; } && clone osoy
       fi
       ;;
     *) err "unknown operator '$operator'" ;;

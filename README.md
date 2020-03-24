@@ -1,8 +1,8 @@
-# Shell Manager
+# Osoy
 Script manager for interpreted programs, including, but not limited to, python programs, nodejs programs \& shell scripts.
 
 ## File structure
-    ~/.shm/
+    ~/.osoy/
       <author>/
         ...
       <author>/
