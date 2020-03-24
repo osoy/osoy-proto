@@ -1,5 +1,14 @@
 #!/bin/sh
 
+err() { echo "error: $*" && exit; }
+msg() {
+  printf '# '
+  if [ "$1" = '-n' ]
+  then shift; printf "$*"
+  else echo "$*"
+  fi
+}
+
 # check dependencies
 isInstalled() { command -v "$*" >/dev/null; }
 missingdeps=
@@ -7,7 +16,7 @@ for dep in sed awk cut tr curl git
 do isInstalled "$dep" || missingdeps="$dep $missingdeps"
 done
 if [ -n "$missingdeps" ]
-then echo "Required but not installed: $missingdeps"; exit
+then err "required but not installed: $missingdeps"
 fi
 
 
@@ -39,8 +48,6 @@ help() {
   "
   exit
 }
-
-err() { echo "osoy: $*" && exit; }
 
 
 
@@ -93,11 +100,11 @@ toDir() {
 }
 
 inBin() {
-  echo
+  err "not implemented yet"
 }
 
 addToBin() {
-  echo
+  err "not implemented yet"
 }
 
 getQuery() {
@@ -160,7 +167,7 @@ clone() {
     elif [ -n "$d" ]
     then publicSources=$d
     else
-      echo "Querying $author/$package"
+      msg "Querying $author/$package"
       for domain in github.com gitlab.com bitbucket.org
       do
         link=$(packageUrl $p $domain $author $package)
@@ -171,14 +178,14 @@ clone() {
     fi
 
     if [ -z "$publicSources" ]
-    then echo "No sources found for $author/$package. Try using flag -d <domain> to enforce a domain"
+    then msg "No sources found for $author/$package. Try using flag -d <domain> to enforce a domain"
     else
       sourcesCount=$(count $publicSources)
       answer=0
       if [ $sourcesCount -eq 1 ]
       then answer=1
       else
-        printf "Available sources:"
+        msg -n "Available sources:"
         i=0
         for domain in $publicSources
         do
@@ -188,7 +195,7 @@ clone() {
         echo
         while [ $answer -lt 1 ] || [ $answer -gt $sourcesCount ]
         do
-          printf 'Enter a number (default=1): '
+          msg -n 'Enter a number (default=1): '
           read -r answer
           if [ "$answer" = "$(printf '\n')" ]
           then answer=1
@@ -200,9 +207,9 @@ clone() {
       toDir 'packages' $domain $author
       if [ -d $package ]
       then
-        echo 'Package with the same author and name has already been installed'
-        echo 'Using "osoy sync <package>" is recommended'
-        printf "Do you want to overwrite it? [y/N] "
+        msg 'Package with the same author and name has already been installed'
+        msg 'Using "osoy sync <package>" is recommended'
+        msg -n "Do you want to overwrite it? [y/N] "
         read -r answer
         if [ "$answer" = 'y' ] || [ "$answer" = 'Y' ]
         then rm -rf $package
@@ -215,7 +222,7 @@ clone() {
       git clone $gitFlags "$(packageUrl $p $domain $author $package)"
     fi
   done
-  echo 'Done'
+  msg 'Done'
 }
 
 
@@ -292,16 +299,16 @@ clone() {
       man $(slice 1 -1 $args)
       ;;
     uninstall)
-      printf "Remove all packages and osoy? [y/N] "
+      msg -n "Remove all packages and osoy? [y/N] "
       read -r answer
       { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ]; } && rm -rf "$osoydir" &
       ;;
     netinstall)
       if [ -d "$osoydir"/packages/github.com/rasmusmerzin/osoy ]
       then
-        echo 'Shell Manager seems to be already installed. Try updating it with "osoy sync osoy".'
+        msg 'Shell Manager seems to be already installed. Try updating it with "osoy sync osoy".'
       else
-        printf "Install osoy to $osoydir/packages/github.com/rasmusmerzin/osoy? [Y/n] "
+        msg -n "Install osoy to $osoydir/packages/github.com/rasmusmerzin/osoy? [Y/n] "
         read -r answer
         d='github.com'
         { [ "$answer" = 'y' ] || [ "$answer" = 'Y' ] || [ "$answer" = "$(printf '\n')" ]; } && clone osoy

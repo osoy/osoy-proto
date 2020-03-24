@@ -3,14 +3,19 @@ Script manager for interpreted programs, including, but not limited to, python p
 
 ## File structure
     ~/.osoy/
-      <author>/
+      bin/
+        <symlink> -> <executable>
         ...
-      <author>/
-        <package>/
+      packages/
+        <domain>/
           ...
-        <package>/
-          <modules>/
-          <modules>/
-          <executable>
-          <executable>
-          ...
+          <author>/
+            ...
+          <author>/
+            <package>/
+              ...
+            <package>/
+              <modules>/
+              <module>
+              <executable>
+              ...
