@@ -4,8 +4,8 @@ err() { echo "error: $*" && exit; }
 msg() {
   printf '\033[2m##\033[22m '
   if [ "$1" = '-n' ]
-  then shift; printf "$*"
-  else echo "$*"
+  then shift; printf "$@"
+  else echo "$@"
   fi
 }
 
@@ -41,11 +41,11 @@ help() {
     c|clone    <query*>   clone packages from GitHub, GitLab or Bitbucket v
     r|remove   <query*>   remove packages                                 v
     s|symlink  [query*]   make packages' executables available in PATH    v
-    u|update   [query*]   update (all) packages                           -
+    u|update   [query*]   update (all) packages                           o
     l|list     [query*]   list (all) packages                             v
     m|man      <query>    view package's README file                      -
 
-    dir        <query>    print package's directory path                  -
+    dir        <query>    print package's directory path                  v
     unistall   -          uninstall osoy and all packages                 v
 
   Query syntax: <[[domain/]author/]package>
@@ -125,7 +125,10 @@ toDir() {
   done
 }
 
-getFilename() { echo "$*" | sed -n 's/^.*\/\([^\/]\+\)$/\1/p'; }
+getFilename() { echo "$*" | sed -n 's/^.*\/\([^\/]\+\)\/\?$/\1/p'; }
+getFileDirectory() { echo "$*" | sed -n 's/^\(.*\)\/[^\/]\+\/\?$/\1/p'; }
+getPackageOrigin() { echo "$*" | sed -n 's/^.*\/\([^\/]\+\)\/\([^\/]\+\)\/[^\/]\+\/\?$/\1\/\2/p'; }
+getPackageId() { echo "$*" | sed -n 's/^.*\/\([^\/]\+\)\/\([^\/]\+\)\/\([^\/]\+\)\/\?$/\1\/\2\/\3/p'; }
 
 inBin() {(
   toDir "$osoydir" bin
@@ -144,6 +147,33 @@ unlinkFromBin() {(
   toDir "$osoydir" bin
   rm -vf "$(inBin "$*")" 2>/dev/null
 )}
+
+getQuery() {
+  wholeQuery=
+  for i in "$@"
+  do
+    id=$(echo "$i" | tr '/' ' ')
+    package=$(nth -1 $id)
+    author=$(nth -2 $id)
+    domain=$(nth -3 $id)
+
+    [ -z "$author" ] && [ -n "$a" ] && author=$a
+    [ -z "$domain" ] && [ -n "$d" ] && domain=$d
+
+    query=$(echo ".*$domain.*\/.*$author.*\/.*$package.*" | sed 's/\([^\\]\)\./\1[^\\\/]/g')
+    if [ -z "$wholeQuery" ]
+    then wholeQuery=$query
+    else wholeQuery="$wholeQuery\|$query"
+    fi
+  done
+  echo "$wholeQuery"
+}
+
+getInstalledPackages() {
+  if [ -d "$osoydir" ]
+  then find "$osoydir/packages" -mindepth 3 -maxdepth 3 -type d -regextype sed -regex ".*\($(getQuery $*)\)$"
+  fi
+}
 
 linkPackagesToBin() {
   output=$(
@@ -187,45 +217,26 @@ removePackages() {
   fi
 }
 
-getQuery() {
-  wholeQuery=
-  for i in "$@"
-  do
-    id=$(echo "$i" | tr '/' ' ')
-    package=$(nth -1 $id)
-    author=$(nth -2 $id)
-    domain=$(nth -3 $id)
-
-    [ -z "$author" ] && [ -n "$a" ] && author=$a
-    [ -z "$domain" ] && [ -n "$d" ] && domain=$d
-
-    query=$(echo ".*$domain.*\/.*$author.*\/.*$package.*" | sed 's/\([^\\]\)\./\1[^\\\/]/g')
-    if [ -z "$wholeQuery" ]
-    then wholeQuery=$query
-    else wholeQuery="$wholeQuery\|$query"
-    fi
-  done
-  echo "$wholeQuery"
-}
-
-getInstalledPackages() {
-  if [ -d "$osoydir" ]
-  then find "$osoydir/packages" -mindepth 3 -maxdepth 3 -type d -regextype sed -regex ".*\($(getQuery $*)\)$"
-  fi
-}
-
-list() {
+listPackages() {
   for pkg in $(getInstalledPackages $*)
   do
-    echo "$pkg" | sed 's/^.*\/\([^\/]\+\)\/\([^\/]\+\)\/\([^\/]\+\)$/\o33[2m\1\/\2\/\o33[22m\o33[1m\3\o33[0m/'
+    getPackageId "$pkg"
     find "$pkg" -maxdepth 1 -type f,l | while read file
     do [ -x "$file" ] && {
       symbolic=$(inBin "$file")
       if [ -n "$symbolic" ]
-      then printf '  %s <- \033[32m%s\033[0m\n' "$(getFilename "$file")" "$symbolic"
+      then printf '  %s <- \033[1m\033[36m%s\033[0m\n' "$(getFilename "$file")" "$symbolic"
       else printf '  \033[2m%s\033[22m\n' "$(getFilename "$file")"
       fi
     } done
+  done
+}
+
+updatePackages() {
+  for pkg in $(getInstalledPackages $*)
+  do
+    msg "Updating $(getPackageId "$pkg")"
+    (cd "$pkg" && git pull)
   done
 }
 
@@ -373,8 +384,9 @@ clonePackages() {
 
   if [ -z $operator ]
   then
-    [ -n "$v" ] && [ "$(getFilename "$0")" = 'osoy' ] &&
-      { cd $(ls -l "$0" | sed -n 's/^.* -> \(.*\)\/[^\/]\+$/\1/p') && git log --pretty=oneline -50 | sed -n 's/^.* v\([0-9]\+\.[0-9]\+\.[0-9]\+\)$/\1/p' | head -n 1; }
+    [ -n "$v" ] && [ "$(getFilename "$0")" = 'osoy' ] && {
+        cd $(ls -l "$0" | sed -n 's/^.* -> \(.*\)\/[^\/]\+$/\1/p') &&
+          git log --pretty=oneline -50 | sed -n 's/^.* v\([0-9]\+\.[0-9]\+\.[0-9]\+\)\( .*\)\?$/\1/p' | head -n 1; }
     [ -n "$h" ] && help
     [ $# -eq 0 ] && {
       B=1
@@ -394,8 +406,11 @@ clonePackages() {
         [ $(count $args) -lt 2 ] && err 'no packages specified'
         removePackages $(slice 1 -1 $args)
         ;;
+      u|update)
+        updatePackages $(slice 1 -1 $args)
+        ;;
       l|list)
-        list $(slice 1 -1 $args)
+        listPackages $(slice 1 -1 $args)
         ;;
       dir)
         echo "$(nth 0 $(getInstalledPackages $(slice 1 -1 $args)))"
