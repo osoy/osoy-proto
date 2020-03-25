@@ -39,8 +39,8 @@ help() {
 
   Operator:
     c|clone    <query*>   clone packages from GitHub, GitLab or Bitbucket v
-    s|symlink  <query*>   make packages' executables available in PATH    v
-    r|remove   <query*>   remove packages                                 -
+    r|remove   <query*>   remove packages                                 v
+    s|symlink  [query*]   make packages' executables available in PATH    v
     u|update   [query*]   update (all) packages                           -
     l|list     [query*]   list (all) packages                             v
     m|man      <query>    view package's README file                      -
@@ -132,7 +132,7 @@ inBin() {(
   ls -la | sed -n 's/^l.*[0-9]\{2\}:[0-9]\{2\} \(.\+\) -> '"$(echo "$*" | sed -s 's/\//\\\//g')"'$/\1/p'
 )}
 
-addToBin() {(
+linkToBin() {(
   toDir "$osoydir" bin
   filename=$(getFilename "$*")
   symbolicSource=$(ls -la | sed -n 's/^l.*[0-9]\{2\}:[0-9]\{2\} '"$filename"' -> \(.\+\)$/\1/p')
@@ -140,17 +140,17 @@ addToBin() {(
   ln -sfv "$*" "$filename"
 )}
 
-removeFromBin() {(
+unlinkFromBin() {(
   toDir "$osoydir" bin
   rm -vf "$(inBin "$*")" 2>/dev/null
 )}
 
-addPackagesToBin() {
+linkPackagesToBin() {
   output=$(
     for pkg in $(getInstalledPackages $*)
     do
       find "$pkg" -maxdepth 1 -type f,l | while read file
-      do [ -x "$file" ] && addToBin "$file"
+      do [ -x "$file" ] && linkToBin "$file"
       done
     done
   )
@@ -158,17 +158,33 @@ addPackagesToBin() {
   msg "$(echo "$output" | grep -vc '^$') symbolic link(s) added"
 }
 
-removePackagesFromBin() {
+unlinkPackagesFromBin() {
   output=$(
     for pkg in $(getInstalledPackages $*)
     do
       find "$pkg" -maxdepth 1 -type f,l | while read file
-      do [ -x "$file" ] && removeFromBin "$file"
+      do [ -x "$file" ] && unlinkFromBin "$file"
       done
     done
   )
   echo "$output" | grep -v '^$'
   msg "$(echo "$output" | grep -vc '^$') symbolic link(s) removed"
+}
+
+removePackages() {
+  pkgsToRemove=$(getInstalledPackages $*)
+  if [ $(count $pkgsToRemove) -gt 0 ]
+  then
+    msg 'Removing following packages:'
+    echo "$pkgsToRemove"
+    promptYes 'Proceed?' && {
+      unlinkPackagesFromBin $*
+      for pkg in $(getInstalledPackages $*)
+      do msg "Removing $pkg"; rm -rf "$pkg"
+      done
+    }
+  else msg "No packages found that would satisfy '$*'"
+  fi
 }
 
 getQuery() {
@@ -216,7 +232,7 @@ list() {
 packageUrl() { echo "$1://$2/$3/$4/"; }
 httpStatus() { curl -s -o /dev/null -I -w "%{http_code}" "$*"; }
 
-clone() {
+clonePackages() {
   for i in "$@"
   do
     id=$(echo "$i" | tr '/' ' ')
@@ -283,17 +299,15 @@ clone() {
       then
         msg 'Package with the same author and name has already been installed'
         msg 'Using "osoy sync <package>" is recommended'
-        if promptNo "Do you want to overwrite $domain/$author/$package?"
-        then rm -rf $package
-        else continue
-        fi
+        { promptNo "Do you want to overwrite $domain/$author/$package?" && removePackages "$domain/$author/$package"; } ||
+          continue
       fi
       gitFlags=
       [ -z "$B" ] && gitFlags="$gitFlags --single-branch"
       [ -n "$b" ] && gitFlags="$gitFlags --branch $b"
       git clone $gitFlags "$(packageUrl $p $domain $author $package)" &&
         promptYes "Symlink $package's executables?" &&
-          addPackagesToBin "$domain/$author/$package"
+          linkPackagesToBin "$domain/$author/$package"
     fi
   done
   msg 'Done'
@@ -365,16 +379,20 @@ clone() {
     [ $# -eq 0 ] && {
       B=1
       y=1
-      clone github.com/osoy/osoy
+      clonePackages github.com/osoy/osoy
     }
   else
     case $operator in
       c|clone)
         [ $(count $args) -lt 2 ] && err 'no packages specified'
-        clone $(slice 1 -1 $args)
+        clonePackages $(slice 1 -1 $args)
         ;;
       s|symlink)
-        addPackagesToBin $(slice 1 -1 $args)
+        linkPackagesToBin $(slice 1 -1 $args)
+        ;;
+      r|remove)
+        [ $(count $args) -lt 2 ] && err 'no packages specified'
+        removePackages $(slice 1 -1 $args)
         ;;
       l|list)
         list $(slice 1 -1 $args)
