@@ -45,6 +45,7 @@ help() {
     l|list     [query*]   list (all) packages                             v
     m|man      <query>    view package's README file                      -
 
+    dir        <query>    print package's directory path                  -
     unistall   -          uninstall osoy and all packages                 v
 
   Query syntax: <[[domain/]author/]package>
@@ -377,6 +378,9 @@ clone() {
         ;;
       l|list)
         list $(slice 1 -1 $args)
+        ;;
+      dir)
+        echo "$(nth 0 $(getInstalledPackages $(slice 1 -1 $args)))"
         ;;
       uninstall)
         promptNo "Remove all packages and osoy?" && { rm -rvf "$osoydir" & }
