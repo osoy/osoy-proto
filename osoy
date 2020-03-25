@@ -35,6 +35,7 @@ help() {
     -y         -          proceed with defaults                           v
     -f         -          force overwriting and/or removing               v
     -v         -          show version                                    v
+    -h         -          show help menu                                  v
 
   Operator:
     c|clone    <query*>   clone packages from GitHub, GitLab or Bitbucket v
@@ -45,7 +46,6 @@ help() {
     m|man      <query>    view package's README file                      -
 
     unistall   -          uninstall osoy and all packages                 v
-    netinstall -          installation for netinstall                     o
 
   Query syntax: <[[domain/]author/]package>
   "
@@ -282,7 +282,7 @@ clone() {
       then
         msg 'Package with the same author and name has already been installed'
         msg 'Using "osoy sync <package>" is recommended'
-        if promptNo "Do you want to overwrite it?"
+        if promptNo "Do you want to overwrite $domain/$author/$package?"
         then rm -rf $package
         else continue
         fi
@@ -309,6 +309,7 @@ clone() {
   y=
   f=
   v=
+  h=
   args=
   currentflag=
   for arg in "$@"
@@ -338,6 +339,7 @@ clone() {
           y) y=1 ;;
           f) f=1 ;;
           v) v=1 ;;
+          h) h=1 ;;
           *)
             if [ $i -eq $flagBundleCount ]
             then currentflag=$flag
@@ -356,11 +358,14 @@ clone() {
 
   if [ -z $operator ]
   then
-    if [ -n "$v" ] && [ "$(getFilename "$0")" = 'osoy' ]
-    then
-      (cd $(echo "$0" | sed 's/\/[^\/]\+$//') && git log --pretty=oneline -50 | sed -n 's/^.* v\([0-9]\+\.[0-9]\+\.[0-9]\+\)$/\1/p' | head -n 1)
-    else help
-    fi
+    [ -n "$v" ] && [ "$(getFilename "$0")" = 'osoy' ] &&
+      { cd $(ls -l "$0" | sed -n 's/^.* -> \(.*\)\/[^\/]\+$/\1/p') && git log --pretty=oneline -50 | sed -n 's/^.* v\([0-9]\+\.[0-9]\+\.[0-9]\+\)$/\1/p' | head -n 1; }
+    [ -n "$h" ] && help
+    [ $# -eq 0 ] && {
+      B=1
+      y=1
+      clone github.com/osoy/osoy
+    }
   else
     case $operator in
       c|clone)
@@ -375,12 +380,6 @@ clone() {
         ;;
       uninstall)
         promptNo "Remove all packages and osoy?" && { rm -rvf "$osoydir" & }
-        ;;
-      netinstall)
-        if [ -d "$osoydir"/packages/github.com/rasmusmerzin/osoy ]
-        then msg 'Shell Manager seems to be already installed. Try updating it with "osoy sync osoy".'
-        else promptYes "Install osoy to $osoydir/packages/github.com/rasmusmerzin/osoy?" && clone github.com/osoy/osoy
-        fi
         ;;
       *) err "unknown operator '$operator'" ;;
     esac
