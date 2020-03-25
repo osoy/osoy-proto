@@ -12,7 +12,7 @@ msg() {
 # check dependencies
 isInstalled() { command -v "$*" >/dev/null; }
 missingdeps=
-for dep in sed grep cut tr curl git
+for dep in sed grep find sort cut tr curl git
 do isInstalled "$dep" || missingdeps="$dep $missingdeps"
 done
 if [ -n "$missingdeps" ]
@@ -43,9 +43,10 @@ help() {
     s|symlink  [query*]   make packages' executables available in PATH    v
     u|update   [query*]   update (all) packages                           o
     l|list     [query*]   list (all) packages                             v
-    m|man      <query>    view package's README file                      -
 
     dir        <query>    print package's directory path                  v
+    read       <query>    view package's README file                      v
+    license    <query>    view package's LICENSE file                     v
     unistall   -          uninstall osoy and all packages                 v
 
   Query syntax: <[[domain/]author/]package>
@@ -169,6 +170,16 @@ getQuery() {
   echo "$wholeQuery"
 }
 
+checkQueryAmbiguity() {
+  targetPackages=$(getInstalledPackages $*)
+  if [ $(count $targetPackages) -ge 2 ]
+  then err "query '$*' is ambiguous"
+  elif [ $(count $targetPackages) -le 0 ]
+  then err "no packages satisfy query '$*'"
+  else echo $targetPackages
+  fi
+}
+
 getInstalledPackages() {
   if [ -d "$osoydir" ]
   then find "$osoydir/packages" -mindepth 3 -maxdepth 3 -type d -regextype sed -regex ".*\($(getQuery $*)\)$"
@@ -213,7 +224,7 @@ removePackages() {
       do msg "Removing $pkg"; rm -rf "$pkg"
       done
     }
-  else msg "No packages found that would satisfy '$*'"
+  else msg "no packages satisfy query '$*'"
   fi
 }
 
@@ -236,7 +247,12 @@ updatePackages() {
   for pkg in $(getInstalledPackages $*)
   do
     msg "Updating $(getPackageId "$pkg")"
-    (cd "$pkg" && git pull)
+    pullResult=$(cd "$pkg" && git pull)
+    echo "$pullResult"
+    [ "$pullResult" != 'Already up to date.' ] && {
+      unlinkPackagesFromBin "$pkg"
+      linkPackagesToBin "$pkg"
+    }
   done
 }
 
@@ -309,7 +325,7 @@ clonePackages() {
       if [ -d $package ]
       then
         msg 'Package with the same author and name has already been installed'
-        msg 'Using "osoy sync <package>" is recommended'
+        msg 'Using "osoy update <package>" is recommended'
         { promptNo "Do you want to overwrite $domain/$author/$package?" && removePackages "$domain/$author/$package"; } ||
           continue
       fi
@@ -322,6 +338,24 @@ clonePackages() {
     fi
   done
   msg 'Done'
+}
+
+viewPackageFile() {
+  targetName=$1; shift
+  validFiles=$(find "$*" -type f -iname "$targetName*" | sort)
+  if [ $(echo "$validFiles" | grep -vc '^$') -ge 1 ]
+  then
+    targetFile=$(echo "$validFiles" | head -n 1)
+    if command -v less >/dev/null
+    then less "$targetFile"
+    elif command -v more >/dev/null
+    then more "$targetFile"
+    elif command -v vim >/dev/null
+    then vim -R "$targetFile"
+    else err 'less, more or vim are required to view files'
+    fi
+  else err "no $targetName file was found"
+  fi
 }
 
 
@@ -413,7 +447,16 @@ clonePackages() {
         listPackages $(slice 1 -1 $args)
         ;;
       dir)
-        echo "$(nth 0 $(getInstalledPackages $(slice 1 -1 $args)))"
+        [ $(count $args) -lt 2 ] && err 'no package specified'
+        checkQueryAmbiguity $(slice 1 -1 $args)
+        ;;
+      read)
+        [ $(count $args) -lt 2 ] && err 'no package specified'
+        viewPackageFile 'readme' $(checkQueryAmbiguity $(slice 1 -1 $args))
+        ;;
+      license)
+        [ $(count $args) -lt 2 ] && err 'no package specified'
+        viewPackageFile 'license' $(checkQueryAmbiguity $(slice 1 -1 $args))
         ;;
       uninstall)
         promptNo "Remove all packages and osoy?" && { rm -rvf "$osoydir" & }
