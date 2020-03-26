@@ -8,6 +8,7 @@ msg() {
   else echo "$@"
   fi
 }
+indent() { sed 's/^/  /'; }
 
 # check dependencies
 isInstalled() { command -v "$*" >/dev/null; }
@@ -36,12 +37,13 @@ help() {
     -f         -          force overwriting and/or removing               v
     -v         -          show version                                    v
     -h         -          show help menu                                  v
+    -c         -          display ansi colors                             -
 
   Operator:
     c|clone    <query*>   clone packages from GitHub, GitLab or Bitbucket v
     r|remove   <query*>   remove packages                                 v
     s|symlink  [query*]   make packages' executables available in PATH    v
-    u|update   [query*]   update (all) packages                           o
+    u|update   [query*]   update (all) packages                           v
     l|list     [query*]   list (all) packages                             v
 
     dir        <query>    print package's directory path                  v
@@ -244,16 +246,28 @@ listPackages() {
 }
 
 updatePackages() {
-  for pkg in $(getInstalledPackages $*)
+  targetPackages=$(getInstalledPackages $*)
+  msg "Checking updates for packages:"
+  {
+    for pkg in $targetPackages
+    do getPackageId "$pkg"
+    done
+  } | column | indent
+  echo
+  for pkg in $targetPackages
   do
-    msg "Updating $(getPackageId "$pkg")"
-    pullResult=$(cd "$pkg" && git pull)
-    echo "$pullResult"
-    [ "$pullResult" != 'Already up to date.' ] && {
-      unlinkPackagesFromBin "$pkg"
-      linkPackagesToBin "$pkg"
-    }
+    {
+      pullResult=$(cd "$pkg" && git pull)
+      msg -n "$(getPackageId "$pkg")\n$(echo "$pullResult" | indent)\n"
+      [ "$pullResult" != 'Already up to date.' ] && {
+        unlinkPackagesFromBin "$pkg"
+        linkPackagesToBin "$pkg"
+      }
+    } &
   done
+  wait
+  echo
+  msg "Done"
 }
 
 packageUrl() { echo "$1://$2/$3/$4/"; }
@@ -370,6 +384,7 @@ viewPackageFile() {
   f=
   v=
   h=
+  c=
   args=
   currentflag=
   for arg in "$@"
@@ -400,6 +415,7 @@ viewPackageFile() {
           f) f=1 ;;
           v) v=1 ;;
           h) h=1 ;;
+          c) c=1 ;;
           *)
             if [ $i -eq $flagBundleCount ]
             then currentflag=$flag
