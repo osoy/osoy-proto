@@ -1,14 +1,6 @@
 #!/bin/sh
 
 err() { echo "error: $*" && exit; }
-msg() {
-  printf '\033[2m##\033[22m '
-  if [ "$1" = '-n' ]
-  then shift; printf "$@"
-  else echo "$@"
-  fi
-}
-indent() { sed 's/^/  /'; }
 
 # check dependencies
 isInstalled() { command -v "$*" >/dev/null; }
@@ -21,68 +13,10 @@ then err "required but not installed: $missingdeps"
 fi
 
 
-osoydir="$HOME/.osoy"
-
-help() {
-  echo "
-  Usage: osoy <operator> [flags]
-
-  Flags:
-    -d         <domain>   enforce a specific domain to clone from         v
-    -a         <author>   specify packages' author                        v
-    -p         <protocol> specify a protocol other than HTTPS             v
-    -b         <branch>   specify a single branch as the HEAD             v
-    -B         -          clone all branches                              v
-    -y         -          proceed with defaults                           v
-    -f         -          force overwriting and/or removing               v
-    -v         -          show version                                    v
-    -h         -          show help menu                                  v
-    -c         -          display ansi colors                             -
-
-  Operator:
-    c|clone    <query*>   clone packages from GitHub, GitLab or Bitbucket v
-    r|remove   <query*>   remove packages                                 v
-    s|symlink  [query*]   make packages' executables available in PATH    v
-    u|update   [query*]   update (all) packages                           v
-    l|list     [query*]   list (all) packages                             v
-
-    dir        <query>    print package's directory path                  v
-    read       <query>    view package's README file                      v
-    license    <query>    view package's LICENSE file                     v
-    unistall   -          uninstall osoy and all packages                 v
-
-  Query syntax: <[[domain/]author/]package>
-  "
-  exit
-}
-
-
-
-# prompts
-promptYes() {
-  msg -n "$* [Y/n] "
-  if [ -n "$y" ]
-  then echo; answer=$(printf '\n')
-  else read -r answer
-  fi
-  [ "$answer" = 'y' ] || [ "$answer" = 'Y' ] || [ "$answer" = "$(printf '\n')" ]
-}
-promptNo() {
-  promptChoice='[y/N]'
-  [ -n "$f" ] && promptChoice='[Y/n]'
-  msg -n "$* $promptChoice "
-  if [ -n "$y" ]
-  then echo; answer=$(printf '\n')
-  else read -r answer
-  fi
-  [ "$answer" = 'y' ] || [ "$answer" = 'Y' ] || { [ -n "$f" ] && [ "$answer" = "$(printf '\n')" ]; }
-}
-
-
 
 # array implementation
-join() { tr ' ' ' '; }
-split() { tr ' ' ' '; }
+join() { tr ' ' ' ' | tr '\n' ' '; }
+split() { tr ' ' ' ' | tr ' ' '\n'; }
 nth() {
   i=0
   target=$1; shift
@@ -118,6 +52,95 @@ inside() {
   test $is -eq 1
 }
 
+# user out
+print() {
+  noNewLine=
+  [ "$1" = '-n' ] && noNewLine=1
+  [ -n "$noNewLine" ] && shift
+  printArguments=""
+  for printArg in "$@"
+  do
+    [ -z "$c" ] && printArg=$(echo "$printArg" | sed 's/\o33\[[0-9]\+m//g')
+    if [ -z "$printArguments" ]
+    then printArguments=$(printf '%s' "$printArg" | join)
+    else printArguments="$printArguments $(printf '%s' "$printArg" | join)"
+    fi
+  done
+  printf $printArguments | split
+  [ -z "$noNewLine" ] && echo
+}
+msg() {
+  if [ -n "$c" ]
+  then printf "\033[2m##\033[22m "
+  else printf "## "
+  fi
+  print "$@"
+}
+indent() { sed 's/^/  /'; }
+
+# prompts
+promptYes() {
+  msg -n "$* [Y/n] "
+  if [ -n "$y" ]
+  then echo; answer=$(printf '\n')
+  else read -r answer
+  fi
+  [ "$answer" = 'y' ] || [ "$answer" = 'Y' ] || [ "$answer" = "$(printf '\n')" ]
+}
+promptNo() {
+  promptChoice='[y/N]'
+  [ -n "$f" ] && promptChoice='[Y/n]'
+  msg -n "$* $promptChoice "
+  if [ -n "$y" ]
+  then echo; answer=$(printf '\n')
+  else read -r answer
+  fi
+  [ "$answer" = 'y' ] || [ "$answer" = 'Y' ] || { [ -n "$f" ] && [ "$answer" = "$(printf '\n')" ]; }
+}
+
+# curl
+httpStatus() { curl -s -o /dev/null -I -w "%{http_code}" "$*"; }
+
+
+
+osoydir="$HOME/.osoy"
+
+help() {
+  print "$(echo "
+  Usage: osoy [operator] [flags]
+
+  Flags:
+    -d         <domain>   enforce a specific domain to clone from         v
+    -a         <author>   specify packages' author                        v
+    -p         <protocol> specify a protocol other than HTTPS             v
+    -b         <branch>   specify a single branch as the HEAD             v
+    -B         -          clone all branches                              v
+    -y         -          proceed with defaults                           v
+    -f         -          force overwriting and/or removing               v
+    -v         -          show version                                    v
+    -h         -          show help menu                                  v
+    -c         -          display ansi colors                             v
+
+  Operator:
+    c|clone    <query*>   clone packages from GitHub, GitLab or Bitbucket v
+    r|remove   <query*>   remove packages                                 v
+    s|symlink  [query*]   make packages' executables available in PATH    v
+    u|update   [query*]   update (all) packages                           v
+    l|list     [query*]   list (all) packages                             v
+
+    dir        <query>    print package's directory path                  v
+    read       <query>    view package's README file                      v
+    license    <query>    view package's LICENSE file                     v
+    uninstall  -          uninstall osoy and all packages                 v
+
+  Query syntax: <[[domain/]author/]package>
+  " | sed '
+    s/\(\[\|\]\|[<>*/]\| - \)/\o33[2m\1\o33[22m/g
+    s/^\( \{4\}\)\([^ ]\+\) /\1\o33[1m\2\o33[0m /
+  ')"
+    # s/^\( \{4\}\)\([^ ]\+\)\( \+\)\([^ ]\+\) /\1\o33[1m\2\o33[0m\3\o33[3m\4\o33[23m /
+  exit
+}
 
 
 
@@ -233,16 +256,19 @@ removePackages() {
 listPackages() {
   for pkg in $(getInstalledPackages $*)
   do
-    getPackageId "$pkg"
-    find "$pkg" -maxdepth 1 -type f,l | while read file
-    do [ -x "$file" ] && {
-      symbolic=$(inBin "$file")
-      if [ -n "$symbolic" ]
-      then printf '  %s <- \033[1m\033[36m%s\033[0m\n' "$(getFilename "$file")" "$symbolic"
-      else printf '  \033[2m%s\033[22m\n' "$(getFilename "$file")"
-      fi
-    } done
+    echo "$(
+      getPackageId "$pkg"
+      find "$pkg" -maxdepth 1 -type f,l | while read file
+      do [ -x "$file" ] && {
+        symbolic=$(inBin "$file")
+        if [ -n "$symbolic" ]
+        then print '  %s <- \033[1m\033[36m%s\033[0m' "$(getFilename "$file")" "$symbolic"
+        else print '  \033[2m%s\033[22m' "$(getFilename "$file")"
+        fi
+      } done
+    )" &
   done
+  wait
 }
 
 updatePackages() {
@@ -267,11 +293,10 @@ updatePackages() {
   done
   wait
   echo
-  msg "Done"
+  msg 'Done'
 }
 
 packageUrl() { echo "$1://$2/$3/$4/"; }
-httpStatus() { curl -s -o /dev/null -I -w "%{http_code}" "$*"; }
 
 clonePackages() {
   for i in "$@"
@@ -373,6 +398,12 @@ viewPackageFile() {
 }
 
 
+netinstall() {
+  B=1
+  y=1
+  clonePackages github.com/osoy/osoy
+}
+
 
 # main() {
   d=
@@ -389,7 +420,7 @@ viewPackageFile() {
   currentflag=
   for arg in "$@"
   do
-    arg=$(echo "$arg" | join)
+    arg=$(printf '%s' "$arg" | join)
     if [ -n "$currentflag" ]
     then
       flag=$currentflag
@@ -434,15 +465,17 @@ viewPackageFile() {
 
   if [ -z $operator ]
   then
-    [ -n "$v" ] && [ "$(getFilename "$0")" = 'osoy' ] && {
-        cd $(ls -l "$0" | sed -n 's/^.* -> \(.*\)\/[^\/]\+$/\1/p') &&
-          git log --pretty=oneline -50 | sed -n 's/^.* v\([0-9]\+\.[0-9]\+\.[0-9]\+\)\( .*\)\?$/\1/p' | head -n 1; }
-    [ -n "$h" ] && help
-    [ $# -eq 0 ] && {
-      B=1
-      y=1
-      clonePackages github.com/osoy/osoy
-    }
+    if [ "$(getFilename "$0")" = 'osoy' ]
+    then
+      if [ -n "$h" ]
+      then help
+      elif [ -n "$v" ]
+      then cd $(ls -l "$0" | sed -n 's/^.* -> \(.*\)\/[^\/]\+$/\1/p') &&
+        git log --pretty=oneline -50 | sed -n 's/^.* v\([0-9]\+\.[0-9]\+\.[0-9]\+\)\( .*\)\?$/\1/p' | head -n 1
+      else help
+      fi
+    else netinstall
+    fi
   else
     case $operator in
       c|clone)
