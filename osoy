@@ -5,7 +5,7 @@ err() { echo "error: $*" && exit; }
 # check dependencies
 isInstalled() { command -v "$*" >/dev/null; }
 missingdeps=
-for dep in sed grep find sort cut tr curl git
+for dep in sed grep find ls sort cut tr curl git
 do isInstalled "$dep" || missingdeps="$dep $missingdeps"
 done
 if [ -n "$missingdeps" ]
@@ -110,35 +110,36 @@ help() {
   Usage: osoy [operator] [flags]
 
   Flags:
-    -d         <domain>   enforce a specific domain to clone from         v
-    -a         <author>   specify packages' author                        v
-    -p         <protocol> specify a protocol other than HTTPS             v
-    -b         <branch>   specify a single branch as the HEAD             v
-    -B         -          clone all branches                              v
-    -y         -          proceed with defaults                           v
-    -f         -          force overwriting and/or removing               v
-    -v         -          show version                                    v
-    -h         -          show help menu                                  v
-    -c         -          display ansi colors                             v
+    -d         <domain>   enforce a specific domain to clone from
+    -a         <author>   specify packages' author
+    -p         <protocol> specify a protocol other than HTTPS
+    -b         <branch>   specify a single branch as the HEAD
+    -B         -          clone all branches
+    -y         -          proceed with defaults
+    -f         -          force overwriting and/or removing
+    -v         -          show version
+    -h         -          show help menu
+    -c         -          enable ansi colors
+    -C         -          disable ansi colors
 
-  Operator:
-    c|clone    <query*>   clone packages from GitHub, GitLab or Bitbucket v
-    r|remove   <query*>   remove packages                                 v
-    s|symlink  [query*]   make packages' executables available in PATH    v
-    u|update   [query*]   update (all) packages                           v
-    l|list     [query*]   list (all) packages                             v
+  Operators:
+    c|clone    <query*>   clone packages from GitHub, GitLab or Bitbucket
+    r|remove   <query*>   remove packages
+    s|symlink  [query*]   make packages' executables available in PATH
+    u|update   [query*]   update (all) packages
+    l|list     [query*]   list (all) packages
 
-    dir        <query>    print package's directory path                  v
-    read       <query>    view package's README file                      v
-    license    <query>    view package's LICENSE file                     v
-    uninstall  -          uninstall osoy and all packages                 v
+    dir        <query>    print package's directory path
+    read       <query>    view package's README file
+    license    <query>    view package's LICENSE file
+    uninstall  -          uninstall osoy and all packages
 
   Query syntax: <[[domain/]author/]package>
   " | sed '
     s/\(\[\|\]\|[<>*/]\| - \)/\o33[2m\1\o33[22m/g
-    s/^\( \{4\}\)\([^ ]\+\) /\1\o33[1m\2\o33[0m /
+    s/^\( \{2\}\)\([A-Z].\+\):/\1\o33[1m\2\o33[0m:/
+    s/^\( \{4\}\)\([^ |]\+\)\(|\)\?\([^ |]\+\)\? /\1\o33[1m\2\o33[0m\o33[2m\3\o33[0m\o33[1m\4\o33[0m /
   ')"
-    # s/^\( \{4\}\)\([^ ]\+\)\( \+\)\([^ ]\+\) /\1\o33[1m\2\o33[0m\3\o33[3m\4\o33[23m /
   exit
 }
 
@@ -246,7 +247,15 @@ removePackages() {
     promptYes 'Proceed?' && {
       unlinkPackagesFromBin $*
       for pkg in $(getInstalledPackages $*)
-      do msg "Removing $pkg"; rm -rf "$pkg"
+      do
+        msg "Removing $pkg"
+        rm -rf "$pkg"
+        authorDir=$(getFileDirectory "$pkg")
+        [ -z "$(ls "$authorDir")" ] && {
+          rm -rf "$authorDir"
+          domainDir=$(getFileDirectory "$authorDir")
+          [ -z "$(ls "$domainDir")" ] && rm -rf "$domainDir"
+        }
       done
     }
   else msg "no packages satisfy query '$*'"
@@ -447,6 +456,7 @@ netinstall() {
           v) v=1 ;;
           h) h=1 ;;
           c) c=1 ;;
+          C) c= ;;
           *)
             if [ $i -eq $flagBundleCount ]
             then currentflag=$flag
