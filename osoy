@@ -519,7 +519,7 @@ netinstall() {
         viewPackageFile 'license' $(checkQueryAmbiguity $(slice 1 -1 $args))
         ;;
       uninstall)
-        promptNo "Remove all packages and osoy?" && { rm -rvf "$osoydir" & }
+        promptNo "Remove all packages and osoy?" && rm -rvf "$osoydir"
         ;;
       *) err "unknown operator '$operator'" ;;
     esac
