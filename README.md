@@ -1,10 +1,13 @@
 # Osoy
-Lightweight package manager currently written in POSIX shell. Inspired by vim-plug, yarn and pacman. It supports multiple git hosting services and asynchronous updating.
+Lightweight package manager currently written in POSIX shell.
+Inspired by vim-plug, yarn and pacman.
+It supports multiple git hosting services and asynchronous updating.
 
-<p style='text-align:center'><em><b>a demo gif</b></em></p>
+> ***a demo gif***
 
 ## Compatibility
-It has currently been tested on Linux with dash but most likely will work with bash, zsh and possibly even on Windows with Git Bash. Osoy aims to be easily readable and compliant with variety of platforms.
+It has currently been tested on Linux with dash but most likely will work with bash, zsh and possibly even on Windows with Git Bash.
+Osoy aims to be easily readable and compliant with variety of platforms.
 
 ## Dependencies
     sed; grep; find; ls; sort; cut; tr; curl; git
@@ -68,4 +71,5 @@ It has currently been tested on Linux with dash but most likely will work with b
     -C         -          disable ansi colors
 
 ## Contributions
-I currently don't yet know if anybody other than me would even use something like this. Though if you have interest constructive critisism and contributions are ofcourse more than welcome.
+I currently don't yet know if anybody other than me would even use something like this.
+Of course, if you have interest, constructive criticism and contributions are more than welcome.
