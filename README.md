@@ -1,7 +1,7 @@
-<center>
+<p align='center'>
   <img alt='logo' src='./logo.svg' />
-  <h1>Osoy</h1>
-</center>
+</p>
+<h1 align='center'>Osoy</h1>
 
 Lightweight package manager currently written in POSIX shell.
 Inspired by
