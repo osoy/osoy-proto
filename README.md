@@ -1,4 +1,7 @@
-# Osoy
+<center>
+  <img alt='logo' src='./logo.svg' />
+  <h1>Osoy</h1>
+</center>
 
 Lightweight package manager currently written in POSIX shell.
 Inspired by
