@@ -78,9 +78,9 @@ Add osoy bin directory ~/.osoy/bin to your system path.
 
 To make it permanent add the previous line to your shell profile — ~/.bash_profile, ~/.zprofile, ~/.profile, etc.
 More at
-<a href='https://www.computerhope.com/issues/ch001647.htm'>computerhope.com</a>,
-<a href='https://askubuntu.com/questions/60218/how-to-add-a-directory-to-the-path'>askubuntu.com</a> or
-<a href='https://www.google.com/?q=add+directory+to+path'>google.com</a>.
+<a href='https://www.computerhope.com/issues/ch001647.htm'>computerhope</a>,
+<a href='https://askubuntu.com/questions/60218/how-to-add-a-directory-to-the-path'>askubuntu</a> or
+<a href='https://www.google.com/?q=add+directory+to+path'>google</a>.
 
 ## Configuration
 
