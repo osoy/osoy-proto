@@ -7,7 +7,7 @@ Inspired by
 <a href='https://wiki.archlinux.org/index.php/Pacman' />pacman</a>.
 It supports multiple git hosting services and asynchronous updating.
 
-> ***a demo gif***
+<img alt='demo' src='./demo.gif' width='100%' />
 
 ## Table of contents
 * [Compatibility](#Compatibility)
@@ -88,10 +88,6 @@ You can configure osoy by making an alias.
 For example, next line will enable colors by default
 
 >     alias osoy='osoy -c'
-
-And/or set the default package author to \<your_username\>
-
->     alias osoy='osoy -ca <your_username>'
 
 Following line will make it easier to navigate to package's directory
 
