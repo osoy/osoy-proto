@@ -16,7 +16,6 @@ fi
 
 # array implementation
 join() { tr ' ' ' ' | tr '\n' ' '; }
-joinOnlySpaces() { tr ' ' ' '; }
 split() { tr ' ' ' ' | tr ' ' '\n'; }
 nth() {
   i=0
@@ -191,17 +190,29 @@ removeOrphanLinks() {(
 
 getQuery() {
   wholeQuery=
+  [ $# -le 0 ] && { [ -n "$a" ] || [ -n "$d" ]; } && {
+    package='.*'
+    [ -n "$a" ] && author=$a
+    [ -n "$d" ] && domain=$d
+    [ -z "$author" ] && author='[^\/]*'
+    [ -z "$domain" ] && domain='[^\/]*'
+    wholeQuery=$(echo "\/$domain\/$author\/$package" | sed 's/\([^\\]\)\./\1[^\\\/]/g')
+  }
   for i in "$@"
   do
-    id=$(echo "$i" | tr '/' ' ')
-    package=$(nth -1 $id)
-    author=$(nth -2 $id)
-    domain=$(nth -3 $id)
+    id=$(echo "$i" | sed 's/\// \$/g')
+    package=$(nth -1 $id | sed 's/\$//g')
+    author=$(nth -2 $id | sed 's/\$//g')
+    domain=$(nth -3 $id | sed 's/\$//g')
 
     [ -z "$author" ] && [ -n "$a" ] && author=$a
     [ -z "$domain" ] && [ -n "$d" ] && domain=$d
 
-    query=$(echo ".*$domain.*\/.*$author.*\/.*$package.*" | sed 's/\([^\\]\)\./\1[^\\\/]/g')
+    [ -z "$package" ] && package='[^\/]*'
+    [ -z "$author" ] && author='[^\/]*'
+    [ -z "$domain" ] && domain='[^\/]*'
+
+    query=$(echo "\/$domain\/$author\/$package" | sed 's/\([^\\]\)\./\1[^\\\/]/g')
     if [ -z "$wholeQuery" ]
     then wholeQuery=$query
     else wholeQuery="$wholeQuery\|$query"
