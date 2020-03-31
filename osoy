@@ -200,10 +200,10 @@ getQuery() {
   }
   for i in "$@"
   do
-    id=$(echo "$i" | sed 's/\// \$/g')
-    package=$(nth -1 $id | sed 's/\$//g')
-    author=$(nth -2 $id | sed 's/\$//g')
-    domain=$(nth -3 $id | sed 's/\$//g')
+    id=$(echo "$i" | sed 's/\// \//g')
+    package=$(nth -1 $id | sed 's/\///g')
+    author=$(nth -2 $id | sed 's/\///g')
+    domain=$(nth -3 $id | sed 's/\///g')
 
     [ -z "$author" ] && [ -n "$a" ] && author=$a
     [ -z "$domain" ] && [ -n "$d" ] && domain=$d
