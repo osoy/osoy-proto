@@ -19,9 +19,13 @@ It supports multiple git hosting services and asynchronous updating.
     * [Operators](#Operators)
     * [Query syntax](#Query-syntax)
     * [Flags](#Flags)
-* [Installation](#File-structure)
-* [Configuration](#File-structure)
-* [Contributions](#File-structure)
+* [Installation](#Installation)
+    * [Manual initialization](#Manual-initialization)
+    * [Automated bootstrap](#Automated-bootstrap)
+    * [Add to PATH](#Add-to-PATH)
+* [Configuration](#Configuration)
+* [File structure](#File-structure)
+* [Contributions](#Contributions)
 
 ## Compatibility
 
@@ -73,9 +77,13 @@ You may have to install <code>curl</code> and <code>git</code>.
 
 #### Manual initialization
 
+Clone osoy git repository.
+
 >     mkdir -p ~/.osoy/packages/github.com/osoy &&
 >       cd ~/.osoy/packages/github.com/osoy &&
 >         git clone https://github.com/osoy/osoy
+
+Create a symbolic link for osoy executable.
 
 >     mkdir -p ~/.osoy/bin &&
 >       ln -s ~/.osoy/packages/github.com/osoy/osoy/osoy ~/.osoy/bin/osoy
@@ -85,6 +93,8 @@ You may have to install <code>curl</code> and <code>git</code>.
 Curl contents of the osoy file and execute with POSIX-compliant shell.
 
 >     curl https://raw.githubusercontent.com/osoy/osoy/master/osoy | sh
+
+#### Add to PATH
 
 Add osoy bin directory ~/.osoy/bin to your system path.
 
