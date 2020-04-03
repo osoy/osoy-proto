@@ -71,6 +71,17 @@ You may have to install <code>curl</code> and <code>git</code>.
 
 ## Installation
 
+#### Manual initialization
+
+>     mkdir -p ~/.osoy/packages/github.com/osoy &&
+>       cd ~/.osoy/packages/github.com/osoy &&
+>         git clone https://github.com/osoy/osoy
+
+>     mkdir -p ~/.osoy/bin &&
+>       ln -s ~/.osoy/packages/github.com/osoy/osoy/osoy ~/.osoy/bin/osoy
+
+#### Automated bootstrap
+
 Curl contents of the osoy file and execute with POSIX-compliant shell.
 
 >     curl https://raw.githubusercontent.com/osoy/osoy/master/osoy | sh
