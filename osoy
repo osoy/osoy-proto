@@ -157,12 +157,12 @@ getPackageOrigin() { echo "$*" | sed -n 's/^.*\/\([^\/]\+\)\/\([^\/]\+\)\/[^\/]\
 getPackageId() { echo "$*" | sed -n 's/^.*\/\([^\/]\+\)\/\([^\/]\+\)\/\([^\/]\+\)\/\?$/\1\/\2\/\3/p'; }
 
 inBin() {(
-  toDir "$osoydir" bin
+  toDir bin
   ls -la | sed -n 's/^l.*[0-9]\{2\}:[0-9]\{2\} \(.\+\) -> '"$(echo "$*" | sed -s 's/\//\\\//g')"'$/\1/p'
 )}
 
 linkToBin() {(
-  toDir "$osoydir" bin
+  toDir bin
   filename=$(getFilename "$*")
   symbolicSource=$(ls -la | sed -n 's/^l.*[0-9]\{2\}:[0-9]\{2\} '"$filename"' -> \(.\+\)$/\1/p')
   { [ -n "$f" ] || [ -z "$symbolicSource" ]; } &&
@@ -170,12 +170,12 @@ linkToBin() {(
 )}
 
 unlinkFromBin() {(
-  toDir "$osoydir" bin
+  toDir bin
   rm -vf "$(inBin "$*")" 2>/dev/null
 )}
 
 removeOrphanLinks() {(
-  toDir "$osoydir" bin
+  toDir bin
   output=$(
     ls -la | sed -n 's/^l.*[0-9]\{2\}:[0-9]\{2\} \(.\+\) -> \(.\+\)$/\1 \2/p' | while read symbolicLink
     do
