@@ -3,7 +3,7 @@
 </p>
 <h1 align='center'>Osoy</h1>
 
-Lightweight package manager currently written in POSIX shell.
+Lightweight git repository manager currently written in POSIX shell.
 Inspired by
 <a href='https://github.com/junegunn/vim-plug' />vim-plug</a>,
 <a href='https://github.com/yarnpkg/yarn' />yarn</a> and
