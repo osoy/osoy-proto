@@ -8,24 +8,25 @@ Inspired by
 <a href='https://github.com/junegunn/vim-plug' />vim-plug</a>,
 <a href='https://github.com/yarnpkg/yarn' />yarn</a> and
 <a href='https://wiki.archlinux.org/index.php/Pacman' />pacman</a>.
-It supports multiple git hosting services and asynchronous updating.
+It supports multiple git hosting services.
 
 <img alt='demo' src='./demo.gif' width='100%' />
 
 ## Table of contents
-* [Compatibility](#Compatibility)
-* [Dependencies](#Dependencies)
-* [Usage](#Usage)
-    * [Operators](#Operators)
-    * [Query syntax](#Query-syntax)
-    * [Flags](#Flags)
-* [Installation](#Installation)
-    * [Manual initialization](#Manual-initialization)
-    * [Automated bootstrap](#Automated-bootstrap)
-    * [Add to PATH](#Add-to-PATH)
-* [Configuration](#Configuration)
-* [File structure](#File-structure)
-* [Contributions](#Contributions)
+
+- [Compatibility](#Compatibility)
+- [Dependencies](#Dependencies)
+- [Usage](#Usage)
+  - [Operators](#Operators)
+  - [Query syntax](#Query-syntax)
+  - [Flags](#Flags)
+- [Installation](#Installation)
+  - [Manual initialization](#Manual-initialization)
+  - [Automated bootstrap](#Automated-bootstrap)
+  - [Add to PATH](#Add-to-PATH)
+- [Configuration](#Configuration)
+- [File structure](#File-structure)
+- [Contributions](#Contributions)
 
 ## Compatibility
 
@@ -50,6 +51,7 @@ You may have to install <code>curl</code> and <code>git</code>.
     s|symlink  [query*]   make packages' executables available in PATH
     u|update   [query*]   update (all) packages
     l|list     [query*]   list (all) packages
+    m|make     [query*]   make (all) packages
     dir        <query>    print package's directory path
     read       <query>    view package's README file
     license    <query>    view package's LICENSE file
@@ -115,7 +117,7 @@ For example, next line will enable colors by default
 
 Following line will make it easier to navigate to package's directory
 
->     oycd() { cd "$(osoy dir $*)"; }
+>     oycd() { cd "$(osoy dir "$*")"; }
 
 ## File structure
 
@@ -142,7 +144,7 @@ Following line will make it easier to navigate to package's directory
                     ├── <executable>
                     :   ...
 
-## Contributions
+## Todo
 
-I currently don't yet know if anybody other than me would even use something like this.
-Of course, if you have interest, constructive criticism and contributions are more than welcome.
+- [ ] Rewrite in rust
+- [ ] Add full url option which is needed in case of differently structured urls

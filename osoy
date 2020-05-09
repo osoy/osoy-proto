@@ -124,9 +124,10 @@ help() {
   Operators:
     c|clone    <query*>   clone packages from GitHub, GitLab or Bitbucket
     r|remove   <query*>   remove packages
-    s|symlink  [query*]   make packages' executables available in PATH
+    s|symlink  [query*]   link packages' executables to PATH
     u|update   [query*]   update (all) packages
     l|list     [query*]   list (all) packages
+    m|make     [query*]   make (all) packages
 
     dir        <query>    print package's directory path
     read       <query>    view package's README file
@@ -221,6 +222,12 @@ getQuery() {
   echo "$wholeQuery"
 }
 
+getInstalledPackages() {
+  if [ -d "$osoydir" ]
+  then find "$osoydir/packages" -mindepth 3 -maxdepth 3 -type d -regextype sed -regex ".*\($(getQuery $*)\)$"
+  fi
+}
+
 checkQueryAmbiguity() {
   targetPackages=$(getInstalledPackages $*)
   if [ $(count $targetPackages) -ge 2 ]
@@ -231,10 +238,13 @@ checkQueryAmbiguity() {
   fi
 }
 
-getInstalledPackages() {
-  if [ -d "$osoydir" ]
-  then find "$osoydir/packages" -mindepth 3 -maxdepth 3 -type d -regextype sed -regex ".*\($(getQuery $*)\)$"
-  fi
+getLinkablePackageFiles() {
+  for pkg in $(getInstalledPackages $*)
+  do
+    find "$pkg" -maxdepth 1 -type f,l | while read file
+    do [ -x "$file" ] && echo "$file"
+    done
+  done
 }
 
 linkPackagesToBin() {
@@ -248,6 +258,85 @@ linkPackagesToBin() {
   )
   echo "$output" | grep -v '^$'
   msg "$(echo "$output" | grep -vc '^$') symbolic link(s) added"
+}
+
+getPackageFile() {
+  targetName=$1; shift
+  find "$*" -type f -iname "$targetName" | sort | head -n 1
+}
+
+
+viewPackageFile() {
+  targetFile=$(getPackageFile "$@")
+  if [ -n "$targetFile" ]
+  then
+    if command -v less >/dev/null
+    then less "$targetFile"
+    elif command -v more >/dev/null
+    then more "$targetFile"
+    elif command -v vim >/dev/null
+    then vim -R "$targetFile"
+    else err 'less, more or vim are required to view files'
+    fi
+  else err "no $targetName file was found"
+  fi
+}
+
+makePackages() {
+  if command -v make >/dev/null
+  then
+    makefound=
+    for pkg in $(getInstalledPackages $*)
+    do
+      id=$(getPackageId "$pkg")
+      cd "$pkg" || {
+        msg "Package '$pkg' could not be accessed"
+        continue
+      }
+      makefile=$(getPackageFile 'makefile' "$pkg")
+      if [ -n "$makefile" ]
+      then
+        makefound=1
+        msg "Makefile found for $id"
+        options=$(sed -n 's/^\(\w\+\):.*$/\1/p' "$makefile" | tr '\n' ' ')
+        if [ -z "$options" ]
+        then msg "No makefile options found"
+        else
+          answer=0
+          optionsCount=$(count $options)
+          if [ "$optionsCount" -eq 1 ]
+          then answer=1
+          else
+            msg -n "Available options:"
+            i=0
+            for op in $options
+            do
+              i=$((i+1))
+              printf '  %d) %s' $i $op
+            done
+            echo
+            while [ $answer -lt 1 ] || [ $answer -gt $optionsCount ]
+            do
+              msg -n 'Enter a number (default=1): '
+              if [ -n "$y" ]
+              then echo; answer=$(printf '\n')
+              else read -r answer
+              fi
+              if [ "$answer" = "$(printf '\n')" ]
+              then answer=1
+              else answer=$(printf '%d' "$answer")
+              fi
+            done
+          fi
+          chosenOption=$(nth $((answer-1)) $options)
+          echo "> make $chosenOption"
+          make $chosenOption
+        fi
+      fi
+    done
+    [ -z "$makefound" ] && msg "No makefiles found for $*"
+  else msg "make is not installed"
+  fi
 }
 
 removePackages() {
@@ -270,7 +359,7 @@ removePackages() {
       done
       removeOrphanLinks
     }
-  else msg "no packages satisfy query '$*'"
+  else msg "No packages satisfy query '$*'"
   fi
 }
 
@@ -301,19 +390,18 @@ updatePackages() {
     done
   } | column
   echo
-  for pkg in $targetPackages
+  for pkg in $(echo "$targetPackages" | grep -v osoy) $(echo "$targetPackages" | grep osoy)
   do
-    {
-      pullResult=$(cd "$pkg" && git pull 2>&1)
-      msg -n "$(getPackageId "$pkg")\n$(echo "$pullResult")\n"
-      [ "$pullResult" != 'Already up to date.' ] && {
-        removeOrphanLinks
-        linkPackagesToBin "$pkg"
-      }
-    } &
+    msg "$(getPackageId "$pkg")"
+    pullResult=$(cd "$pkg" && git pull 2>&1)
+    [ -n "$pullResult" ] && echo "$pullResult"
+    echo
+    [ "$pullResult" != 'Already up to date.' ] && {
+      [ -n "$(getPackageFile 'makefile' "$pkg")" ] && makePackages "$pkg"
+      removeOrphanLinks
+      linkPackagesToBin "$pkg"
+    }
   done
-  wait
-  echo
   msg 'Done'
 }
 
@@ -392,30 +480,18 @@ clonePackages() {
       gitFlags=
       [ -z "$B" ] && gitFlags="$gitFlags --single-branch"
       [ -n "$b" ] && gitFlags="$gitFlags --branch $b"
-      git clone $gitFlags "$(packageUrl $p $domain $author $package)" &&
-        promptYes "Symlink $package's executables?" &&
+      git clone $gitFlags "$(packageUrl $p $domain $author $package)" && {
+        [ -n "$(getPackageFile 'makefile' "$package")" ] &&
+          promptYes "Run make?" &&
+          makePackages "$pkg"
+
+        [ -n "$(getLinkablePackageFiles "$domain/$author/$package")" ] &&
+          promptYes "Symlink $package's executables?" &&
           linkPackagesToBin "$domain/$author/$package"
+      }
     fi
   done
   msg 'Done'
-}
-
-viewPackageFile() {
-  targetName=$1; shift
-  validFiles=$(find "$*" -type f -iname "$targetName*" | sort)
-  if [ $(echo "$validFiles" | grep -vc '^$') -ge 1 ]
-  then
-    targetFile=$(echo "$validFiles" | head -n 1)
-    if command -v less >/dev/null
-    then less "$targetFile"
-    elif command -v more >/dev/null
-    then more "$targetFile"
-    elif command -v vim >/dev/null
-    then vim -R "$targetFile"
-    else err 'less, more or vim are required to view files'
-    fi
-  else err "no $targetName file was found"
-  fi
 }
 
 
@@ -517,17 +593,20 @@ netinstall() {
       l|list)
         listPackages $(slice 1 -1 $args)
         ;;
+      m|make)
+        makePackages $(slice 1 -1 $args)
+        ;;
       dir)
         [ $(count $args) -lt 2 ] && err 'no package specified'
         checkQueryAmbiguity $(slice 1 -1 $args)
         ;;
       read)
         [ $(count $args) -lt 2 ] && err 'no package specified'
-        viewPackageFile 'readme' $(checkQueryAmbiguity $(slice 1 -1 $args))
+        viewPackageFile 'readme*' $(checkQueryAmbiguity $(slice 1 -1 $args))
         ;;
       license)
         [ $(count $args) -lt 2 ] && err 'no package specified'
-        viewPackageFile 'license' $(checkQueryAmbiguity $(slice 1 -1 $args))
+        viewPackageFile 'license*' $(checkQueryAmbiguity $(slice 1 -1 $args))
         ;;
       uninstall)
         promptNo "Remove all packages and osoy?" && rm -rvf "$osoydir"
