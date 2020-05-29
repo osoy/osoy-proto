@@ -1,16 +1,15 @@
-<p align='center'>
-  <img alt='logo' src='./logo.svg' />
-</p>
-<h1 align='center'>Osoy</h1>
+# Osoy Prototype
 
-Lightweight git repository manager currently written in POSIX shell.
+Lightweight git repository manager.
 Inspired by
 <a href='https://github.com/junegunn/vim-plug' />vim-plug</a>,
 <a href='https://github.com/yarnpkg/yarn' />yarn</a> and
 <a href='https://wiki.archlinux.org/index.php/Pacman' />pacman</a>.
 It supports multiple git hosting services.
 
-<img alt='demo' src='./demo.gif' width='100%' />
+This is a prototype (v0.0.7) written in POSIX shell.
+
+Official release written in Rust is available at [github.com/osoy/osoy](https://github.com/osoy/osoy).
 
 ## Table of contents
 
@@ -30,8 +29,8 @@ It supports multiple git hosting services.
 
 ## Compatibility
 
-It has currently been tested on Linux with dash but most likely will work on BSD and macOS with bash, zsh and possibly even on Windows with Git Bash.
-Osoy aims to be easily readable and compatible with variety of platforms.
+It has currently been tested on Linux with dash but most likely will work on BSD and macOS with bash or zsh.
+This software relies on extended file metadata to determine whether a file is executable.
 
 ## Dependencies
 
@@ -146,5 +145,4 @@ Following line will make it easier to navigate to package's directory
 
 ## Todo
 
-- [ ] Rewrite in rust
-- [ ] Add full url option which is needed in case of differently structured urls
+- [x] Rewrite in rust
