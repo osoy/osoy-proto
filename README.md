@@ -1,5 +1,7 @@
 # Osoy Prototype
 
+> **Successor at [github.com/osoy/osoy](https://github.com/osoy/osoy).**
+
 Lightweight git repository manager.
 Inspired by
 <a href='https://github.com/junegunn/vim-plug' />vim-plug</a>,
@@ -8,8 +10,6 @@ Inspired by
 It supports multiple git hosting services.
 
 This is a prototype (v0.0.7) written in POSIX shell.
-
-Official release written in Rust is available at [github.com/osoy/osoy](https://github.com/osoy/osoy).
 
 ## Table of contents
 
